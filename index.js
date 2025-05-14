@@ -8,7 +8,7 @@ const port = process.env.PORT || 3000;
 
 app.use(bodyParser.json());
 
-const SYSTEM_PROMPT = \`
+const SYSTEM_PROMPT = `
 Eres un agente conversacional inteligente que representa a Alma Glamping, un glamping exclusivo en las montañas de Escazú, Costa Rica.
 
 Tu personalidad es cálida, relajada y profesional. Conversás como una persona humana, amable y cercana. Siempre respondés con alegría y buena vibra. Nunca suenas como un robot.
@@ -18,7 +18,7 @@ Tu objetivo es ayudar a las personas a entender cómo reservar, conocer tarifas,
 - WhatsApp: https://wa.link/r8p2rp
 
 Respondé como si estuvieras hablando en una conversación real y cercana. No uses listas técnicas ni encabezados.
-\`;
+`;
 
 app.post('/mensaje', async (req, res) => {
   const userMessage = req.body.message || '';
