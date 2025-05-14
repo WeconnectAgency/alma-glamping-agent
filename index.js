@@ -36,7 +36,7 @@ app.post('/mensaje', async (req, res) => {
       temperature: 0.7
     }, {
       headers: {
-        'Authorization': `Bearer \${process.env.OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json'
       }
     });
@@ -44,7 +44,7 @@ app.post('/mensaje', async (req, res) => {
     const botReply = response.data.choices[0].message.content;
     res.json({ reply: botReply });
 
-  catch (error) {
+  } catch (error) {
   console.error('Error al consultar OpenAI:', error.message);
   console.error('Detalle completo:', error.response?.data || error);
   res.status(500).json({ error: 'Hubo un error procesando tu mensaje.' });
