@@ -44,10 +44,11 @@ app.post('/mensaje', async (req, res) => {
     const botReply = response.data.choices[0].message.content;
     res.json({ reply: botReply });
 
-  } catch (error) {
-    console.error('Error al consultar OpenAI:', error.message);
-    res.status(500).json({ error: 'Hubo un error procesando tu mensaje.' });
-  }
+  catch (error) {
+  console.error('Error al consultar OpenAI:', error.message);
+  console.error('Detalle completo:', error.response?.data || error);
+  res.status(500).json({ error: 'Hubo un error procesando tu mensaje.' });
+}
 });
 
 app.listen(port, () => {
