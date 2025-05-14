@@ -34,7 +34,7 @@ app.post('/mensaje', async (req, res) => {
       temperature: 0.7
     }, {
       headers: {
-        'Authorization': \`Bearer \${process.env.OPENAI_API_KEY}\`,
+        'Authorization': `Bearer \${process.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json'
       }
     });
@@ -49,5 +49,5 @@ app.post('/mensaje', async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(\`Servidor activo en http://localhost:\${port}\`);
+  console.log(`Servidor activo en http://localhost:\${port}`);
 });
