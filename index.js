@@ -27,6 +27,7 @@ app.post('/mensaje', async (req, res) => {
   const userId = req.body.userId || 'cliente';
 
   try {
+    console.log("API KEY usada:", process.env.OPENAI_API_KEY);
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
       model: 'gpt-4o',
       messages: [
@@ -42,7 +43,7 @@ app.post('/mensaje', async (req, res) => {
     });
 
     const botReply = response.data.choices[0].message.content;
-    res.json({ reply: botReply });
+    res.json({ respuesta: botReply });
 
   } catch (error) {
   console.error('Error al consultar OpenAI:', error.message);
