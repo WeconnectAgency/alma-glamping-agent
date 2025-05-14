@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
-const cors = require('cors');
+const cors = require("cors");
 require('dotenv').config();
 
 const app = express();
@@ -51,13 +51,13 @@ Ejemplo de respuestas naturales:
 No uses lenguaje técnico ni artificial. Siempre respondé como una persona amable, informada y servicial que conoce muy bien Alma Glamping y quiere que el cliente tenga una experiencia inolvidable.
 `;
 
+
 app.post('/mensaje', async (req, res) => {
   const userMessage = req.body.message || '';
   const userId = req.body.userId || 'cliente';
 
   try {
-    console.log("🔑 API KEY usada:", process.env.OPENAI_API_KEY);
-
+    
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
       model: 'gpt-4o',
       messages: [
@@ -76,13 +76,12 @@ app.post('/mensaje', async (req, res) => {
     res.json({ reply: botReply });
 
   } catch (error) {
-    console.error('❌ Error al consultar OpenAI:', error.message);
-    console.error('📋 Detalle completo:', error.response?.data || error);
-    res.status(500).json({ error: 'Hubo un error procesando tu mensaje.' });
-  }
+  console.error('Error al consultar OpenAI:', error.message);
+  console.error('Detalle completo:', error.response?.data || error);
+  res.status(500).json({ error: 'Hubo un error procesando tu mensaje.' });
+}
 });
 
 app.listen(port, () => {
-  console.log(`✅ Servidor activo en http://localhost:${port}`);
+  console.log(`Servidor activo en http://localhost:\${port}`);
 });
-
