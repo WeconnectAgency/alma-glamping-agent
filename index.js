@@ -1,7 +1,9 @@
+// index.js (Backend con historial por usuario)
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
-const cors = require("cors");
+const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
@@ -9,6 +11,9 @@ app.use(cors());
 const port = process.env.PORT || 3000;
 
 app.use(bodyParser.json());
+
+// Memoria en RAM para cada usuario (temporal, se reinicia al apagar el servidor)
+const userConversations = {};
 
 const SYSTEM_PROMPT = `
 Eres un agente conversacional inteligente que representa a Alma Glamping, un glamping exclusivo en las montañas de Escazú, Costa Rica.
@@ -51,19 +56,24 @@ Ejemplo de respuestas naturales:
 No uses lenguaje técnico ni artificial. Siempre respondé como una persona amable, informada y servicial que conoce muy bien Alma Glamping y quiere que el cliente tenga una experiencia inolvidable.
 `;
 
-
 app.post('/mensaje', async (req, res) => {
   const userMessage = req.body.message || '';
   const userId = req.body.userId || 'cliente';
 
+  // Inicializar historial si no existe
+  if (!userConversations[userId]) {
+    userConversations[userId] = [
+      { role: 'system', content: SYSTEM_PROMPT }
+    ];
+  }
+
+  // Agregar mensaje del usuario
+  userConversations[userId].push({ role: 'user', content: userMessage });
+
   try {
-    
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
       model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userMessage }
-      ],
+      messages: userConversations[userId],
       temperature: 0.7
     }, {
       headers: {
@@ -73,15 +83,16 @@ app.post('/mensaje', async (req, res) => {
     });
 
     const botReply = response.data.choices[0].message.content;
-    res.json({ reply: botReply });
+    userConversations[userId].push({ role: 'assistant', content: botReply });
 
+    res.json({ reply: botReply });
   } catch (error) {
-  console.error('Error al consultar OpenAI:', error.message);
-  console.error('Detalle completo:', error.response?.data || error);
-  res.status(500).json({ error: 'Hubo un error procesando tu mensaje.' });
-}
+    console.error('Error al consultar OpenAI:', error.message);
+    console.error('Detalle completo:', error.response?.data || error);
+    res.status(500).json({ error: 'Hubo un error procesando tu mensaje.' });
+  }
 });
 
 app.listen(port, () => {
-  console.log(`Servidor activo en http://localhost:\${port}`);
+  console.log(`Servidor activo en http://localhost:${port}`);
 });
