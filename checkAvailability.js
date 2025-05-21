@@ -1,7 +1,18 @@
 const XLSX = require('xlsx');
-const { parse, format, addDays } = require('date-fns');
+const { parse, format, addDays, parseISO } = require('date-fns');
+const { es } = require('date-fns/locale');
 
 const FILE_PATH = './Reservas_Alma_Glamping.xlsx';
+
+// ✅ Convierte una fecha tipo '2025-06-14' a '14 de junio'
+function formatearFechaHumana(fechaISO) {
+  try {
+    const fecha = parseISO(fechaISO);
+    return format(fecha, "d 'de' MMMM", { locale: es });
+  } catch (e) {
+    return fechaISO;
+  }
+}
 
 function checkAvailability(dateString) {
   try {
@@ -10,13 +21,14 @@ function checkAvailability(dateString) {
     const data = XLSX.utils.sheet_to_json(sheet);
 
     const targetDate = format(parse(dateString, 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
+    const fechaHumana = formatearFechaHumana(targetDate);
 
     const row = data.find(r => {
       const rowDate = format(new Date(r['Fecha']), 'yyyy-MM-dd');
       return rowDate === targetDate;
     });
 
-    if (!row) return `No encontré información para la fecha ${targetDate}.`;
+    if (!row) return `No encontré información para el ${fechaHumana}.`;
 
     const disponibles = [];
     Object.keys(row).forEach(col => {
@@ -39,18 +51,18 @@ function checkAvailability(dateString) {
             col => col !== 'Fecha' && (!otraRow[col] || otraRow[col].toString().trim() === '')
           );
           if (domosDisponibles.length > 0) {
-            alternativas.push(nuevaFecha);
+            alternativas.push(formatearFechaHumana(nuevaFecha));
           }
         }
       }
 
       if (alternativas.length > 0) {
-        return `Para el ${targetDate}, todos los domos están reservados. 😕 Pero tenemos disponibilidad en: ${alternativas.join(', ')}. ¿Querés que te comparta el link para reservar alguna de esas fechas?`;
+        return `Para el ${fechaHumana}, todos los domos están reservados. 😕 Pero tenemos disponibilidad en: ${alternativas.join(', ')}. ¿Querés que te comparta el link para reservar alguna de esas fechas?`;
       }
 
-      return `Para el ${targetDate}, todos los domos están reservados. 😕`;
+      return `Para el ${fechaHumana}, todos los domos están reservados. 😕`;
     } else {
-      return `Para el ${targetDate}, están disponibles: ${disponibles.join(', ')}. ¿Querés que te comparta el link para reservar?`;
+      return `Para el ${fechaHumana}, están disponibles: ${disponibles.join(', ')}. ¿Querés que te comparta el link para reservar?`;
     }
 
   } catch (error) {
