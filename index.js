@@ -1,3 +1,4 @@
+const parseNaturalDate = require('./parseNaturalDate');
 const checkAvailability = require('./checkAvailability');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -57,13 +58,12 @@ Cena romántica, masajes, decoración especial, fotografía, letras “Cásate c
 Si preguntan cosas fuera de lo común (“¿Puedo llevar un león?”), respondé con humor y elegancia: “¡Qué pregunta tan original! 😅 No está permitido, pero si tenés otra duda real, contame.”
 
 REGLAS DE COMPORTAMIENTO:
-- Saludá solo una vez al inicio con: “Hola 👋 Qué gusto tenerte por acá.” No repitas.
 - No usés frases como “estoy para ayudarte” o “soy un modelo de lenguaje”.
 - Nunca digas que sos un bot.
 - No uses markdown como [enlace](url). Mostrá el link directamente.
 - Si ya diste una respuesta similar en la sesión, retomá lo anterior sin repetirlo.
 - Si no sabés algo, decilo con honestidad y redirigí: “No tengo esa info exacta, pero podés consultarla por WhatsApp 👉 https://wa.link/r8p2rp”
-
+- Solo saludá con “Hola 👋 Qué gusto tenerte por acá.” en la primera respuesta. No lo repitas si ya fue dicho antes en esta sesión.
 ⚠️ Nunca fuerces la reserva. Leés la intención y acompañás con naturalidad.
 `;
 
@@ -73,6 +73,17 @@ const sessionMemory = {};
 
 app.post('/mensaje', async (req, res) => {
   const userMessage = req.body.message || '';
+  let parsedDate = parseNaturalDate(userMessage);
+if (!parsedDate) {
+  // Buscamos una fecha estricta tipo 2025-06-14
+  const strictMatch = userMessage.match(/\d{4}-\d{2}-\d{2}/);
+  parsedDate = strictMatch ? strictMatch[0] : null;
+}
+
+if (userMessage.toLowerCase().includes('disponibilidad') && parsedDate) {
+  const disponibilidad = checkAvailability(parsedDate);
+  return res.json({ reply: disponibilidad });
+}
   const userId = req.body.userId || 'cliente';
 
   if (!sessionMemory[userId]) {
@@ -109,10 +120,9 @@ if (userMessage.toLowerCase().includes('disponibilidad') && dateMatch) {
 
     const isFirstInteraction = sessionMemory[userId].filter(m => m.role === 'user').length === 1;
 
-    if (isFirstInteraction && !alreadyGreeted) {
-      botReply = `Hola 👋 Qué gusto tenerte por acá. ${botReply}`;
-    }
-
+   if (isFirstInteraction && !alreadyGreeted && !botReply.includes('Hola 👋 Qué gusto tenerte por acá.')) {
+  botReply = `Hola 👋 Qué gusto tenerte por acá. ${botReply}`;
+}
     sessionMemory[userId].push({ role: 'assistant', content: botReply });
     res.json({ reply: botReply });
 
