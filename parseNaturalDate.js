@@ -1,8 +1,7 @@
 const { format, addDays, nextSaturday, parse } = require('date-fns');
-const es = require('date-fns/locale/es');
 
 function parseNaturalDate(text) {
-  const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // elimina tildes
+  const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
   const today = new Date();
 
@@ -19,26 +18,41 @@ function parseNaturalDate(text) {
   }
 
   if (lower.includes('fin de semana')) {
-    const saturday = nextSaturday(today);
-    return format(saturday, 'yyyy-MM-dd');
+    return format(nextSaturday(today), 'yyyy-MM-dd');
   }
 
-  // Detecta expresiones tipo “14 de junio” o “1ro de julio”
-  const match = lower.match(/(\d{1,2})\s+de\s+([a-záéíóú]+)/i);
-  if (match) {
-    const day = match[1];
-    const monthName = match[2];
+  // Detecta: “14 de junio”
+  const fullDateMatch = lower.match(/(\d{1,2})\s+de\s+([a-z]+)/i);
+  if (fullDateMatch) {
+    const day = parseInt(fullDateMatch[1]);
+    const monthName = fullDateMatch[2];
     const monthMap = {
       enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
       julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
     };
-
     const monthIndex = monthMap[monthName];
     if (monthIndex !== undefined) {
-      const currentYear = today.getFullYear();
-      const parsedDate = new Date(currentYear, monthIndex, parseInt(day));
-      return format(parsedDate, 'yyyy-MM-dd');
+      const year = today.getFullYear();
+      const date = new Date(year, monthIndex, day);
+      return format(date, 'yyyy-MM-dd');
     }
+  }
+
+  // Detecta: “el 14”, “para el 20”, etc.
+  const dayOnlyMatch = lower.match(/\b(?:el|para|hacia|en)\s+(\d{1,2})\b/);
+  if (dayOnlyMatch) {
+    const day = parseInt(dayOnlyMatch[1]);
+    const currentMonth = today.getMonth();
+    const year = today.getFullYear();
+    const date = new Date(year, currentMonth, day);
+
+    // Si la fecha ya pasó este mes, ir al próximo
+    if (date < today) {
+      const nextMonthDate = new Date(year, currentMonth + 1, day);
+      return format(nextMonthDate, 'yyyy-MM-dd');
+    }
+
+    return format(date, 'yyyy-MM-dd');
   }
 
   return null;
