@@ -11,26 +11,41 @@ function checkAvailability(dateString) {
 
     const targetDate = format(parse(dateString, 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
 
-    // 🪵 Logs para depuración
+    // 🪵 Logs para Render
     console.log("📥 Fecha solicitada:", dateString);
     console.log("🎯 TargetDate:", targetDate);
+
     data.forEach(r => {
-      const interpreted = format(
-        typeof r['Fecha'] === 'string'
-          ? parse(r['Fecha'], 'yyyy-MM-dd', new Date())
-          : r['Fecha'],
-        'yyyy-MM-dd'
-      );
-      console.log("📄 Fila:", r['Fecha'], "Interpretada como:", interpreted);
+      const rawFecha = r['Fecha'];
+      let interpretedDate;
+
+      if (typeof rawFecha === 'number') {
+        const excelDate = XLSX.SSF.parse_date_code(rawFecha);
+        interpretedDate = new Date(excelDate.y, excelDate.m - 1, excelDate.d);
+      } else if (typeof rawFecha === 'string') {
+        interpretedDate = parse(rawFecha, 'yyyy-MM-dd', new Date());
+      } else {
+        interpretedDate = rawFecha;
+      }
+
+      const interpreted = format(interpretedDate, 'yyyy-MM-dd');
+      console.log("📄 Fila:", rawFecha, "Interpretada como:", interpreted);
     });
 
     const row = data.find(r => {
-      const rowDate = format(
-        typeof r['Fecha'] === 'string'
-          ? parse(r['Fecha'], 'yyyy-MM-dd', new Date())
-          : r['Fecha'],
-        'yyyy-MM-dd'
-      );
+      const rawFecha = r['Fecha'];
+      let interpretedDate;
+
+      if (typeof rawFecha === 'number') {
+        const excelDate = XLSX.SSF.parse_date_code(rawFecha);
+        interpretedDate = new Date(excelDate.y, excelDate.m - 1, excelDate.d);
+      } else if (typeof rawFecha === 'string') {
+        interpretedDate = parse(rawFecha, 'yyyy-MM-dd', new Date());
+      } else {
+        interpretedDate = rawFecha;
+      }
+
+      const rowDate = format(interpretedDate, 'yyyy-MM-dd');
       return rowDate === targetDate;
     });
 
