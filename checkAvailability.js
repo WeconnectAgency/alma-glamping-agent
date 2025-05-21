@@ -11,10 +11,13 @@ function checkAvailability(dateString) {
 
     const targetDate = format(parse(dateString, 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
 
-    const row = data.find(r => {
-      const rowDate = format(new Date(r['Fecha']), 'yyyy-MM-dd');
-      return rowDate === targetDate;
-    });
+const row = data.find(r => {
+  const rowDate = format(typeof r['Fecha'] === 'string'
+    ? parse(r['Fecha'], 'yyyy-MM-dd', new Date())
+    : r['Fecha'], 'yyyy-MM-dd');
+  return rowDate === targetDate;
+});
+
 
     if (!row) return `No encontré información para la fecha ${dateString}.`;
 
