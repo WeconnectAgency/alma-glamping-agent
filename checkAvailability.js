@@ -10,6 +10,12 @@ function checkAvailability(dateString) {
     const data = XLSX.utils.sheet_to_json(sheet);
 
     const targetDate = format(parse(dateString, 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
+    
+console.log("📥 Fecha solicitada:", dateString);
+console.log("🎯 TargetDate:", targetDate);
+data.forEach(r => {
+  console.log("📄 Fila:", r['Fecha'], "Interpretada como:", format(typeof r['Fecha'] === 'string' ? parse(r['Fecha'], 'yyyy-MM-dd', new Date()) : r['Fecha'], 'yyyy-MM-dd'));
+});
 
 const row = data.find(r => {
   const rowDate = format(typeof r['Fecha'] === 'string'
@@ -39,5 +45,8 @@ const row = data.find(r => {
     return 'Hubo un problema al consultar la disponibilidad.';
   }
 }
+data.forEach(r => {
+  console.log('Fila:', r['Fecha']);
+});
 
 module.exports = checkAvailability;
