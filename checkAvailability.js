@@ -10,20 +10,29 @@ function checkAvailability(dateString) {
     const data = XLSX.utils.sheet_to_json(sheet);
 
     const targetDate = format(parse(dateString, 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
-    
-console.log("📥 Fecha solicitada:", dateString);
-console.log("🎯 TargetDate:", targetDate);
-data.forEach(r => {
-  console.log("📄 Fila:", r['Fecha'], "Interpretada como:", format(typeof r['Fecha'] === 'string' ? parse(r['Fecha'], 'yyyy-MM-dd', new Date()) : r['Fecha'], 'yyyy-MM-dd'));
-});
 
-const row = data.find(r => {
-  const rowDate = format(typeof r['Fecha'] === 'string'
-    ? parse(r['Fecha'], 'yyyy-MM-dd', new Date())
-    : r['Fecha'], 'yyyy-MM-dd');
-  return rowDate === targetDate;
-});
+    // 🪵 Logs para depuración
+    console.log("📥 Fecha solicitada:", dateString);
+    console.log("🎯 TargetDate:", targetDate);
+    data.forEach(r => {
+      const interpreted = format(
+        typeof r['Fecha'] === 'string'
+          ? parse(r['Fecha'], 'yyyy-MM-dd', new Date())
+          : r['Fecha'],
+        'yyyy-MM-dd'
+      );
+      console.log("📄 Fila:", r['Fecha'], "Interpretada como:", interpreted);
+    });
 
+    const row = data.find(r => {
+      const rowDate = format(
+        typeof r['Fecha'] === 'string'
+          ? parse(r['Fecha'], 'yyyy-MM-dd', new Date())
+          : r['Fecha'],
+        'yyyy-MM-dd'
+      );
+      return rowDate === targetDate;
+    });
 
     if (!row) return `No encontré información para la fecha ${dateString}.`;
 
@@ -41,12 +50,9 @@ const row = data.find(r => {
     }
 
   } catch (error) {
-    console.error('Error leyendo el archivo de reservas:', error);
+    console.error('❌ Error leyendo el archivo de reservas:', error);
     return 'Hubo un problema al consultar la disponibilidad.';
   }
 }
-data.forEach(r => {
-  console.log('Fila:', r['Fecha']);
-});
 
 module.exports = checkAvailability;
