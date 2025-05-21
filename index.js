@@ -73,17 +73,7 @@ const sessionMemory = {};
 
 app.post('/mensaje', async (req, res) => {
   const userMessage = req.body.message || '';
-  let parsedDate = parseNaturalDate(userMessage);
-if (!parsedDate) {
-  // Buscamos una fecha estricta tipo 2025-06-14
-  const strictMatch = userMessage.match(/\d{4}-\d{2}-\d{2}/);
-  parsedDate = strictMatch ? strictMatch[0] : null;
-}
-
-if (userMessage.toLowerCase().includes('disponibilidad') && parsedDate) {
-  const disponibilidad = checkAvailability(parsedDate);
-  return res.json({ reply: disponibilidad });
-}
+  
   const userId = req.body.userId || 'cliente';
 
   if (!sessionMemory[userId]) {
@@ -116,13 +106,13 @@ if (userMessage.toLowerCase().includes('disponibilidad') && dateMatch) {
 
     let botReply = response.data.choices[0].message.content;
 
-    const alreadyGreeted = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola'));
+    const alreadyGreeted = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola 👋'));
+const isFirstAssistantMessage = sessionMemory[userId].filter(m => m.role === 'assistant').length === 0;
 
-    const isFirstInteraction = sessionMemory[userId].filter(m => m.role === 'user').length === 1;
-
-   if (isFirstInteraction && !alreadyGreeted && !botReply.includes('Hola 👋 Qué gusto tenerte por acá.')) {
+if (isFirstAssistantMessage && !alreadyGreeted) {
   botReply = `Hola 👋 Qué gusto tenerte por acá. ${botReply}`;
 }
+
     sessionMemory[userId].push({ role: 'assistant', content: botReply });
     res.json({ reply: botReply });
 

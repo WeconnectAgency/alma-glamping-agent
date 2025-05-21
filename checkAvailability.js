@@ -11,41 +11,22 @@ function checkAvailability(dateString) {
 
     const targetDate = format(parse(dateString, 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
 
-    // 🪵 Logs para Render
     console.log("📥 Fecha solicitada:", dateString);
     console.log("🎯 TargetDate:", targetDate);
 
-    data.forEach(r => {
-      const rawFecha = r['Fecha'];
-      let interpretedDate;
-
+    const findRowDate = (rawFecha) => {
       if (typeof rawFecha === 'number') {
         const excelDate = XLSX.SSF.parse_date_code(rawFecha);
-        interpretedDate = new Date(excelDate.y, excelDate.m - 1, excelDate.d);
+        return new Date(excelDate.y, excelDate.m - 1, excelDate.d);
       } else if (typeof rawFecha === 'string') {
-        interpretedDate = parse(rawFecha, 'yyyy-MM-dd', new Date());
+        return parse(rawFecha, 'yyyy-MM-dd', new Date());
       } else {
-        interpretedDate = rawFecha;
+        return rawFecha;
       }
-
-      const interpreted = format(interpretedDate, 'yyyy-MM-dd');
-      console.log("📄 Fila:", rawFecha, "Interpretada como:", interpreted);
-    });
+    };
 
     const row = data.find(r => {
-      const rawFecha = r['Fecha'];
-      let interpretedDate;
-
-      if (typeof rawFecha === 'number') {
-        const excelDate = XLSX.SSF.parse_date_code(rawFecha);
-        interpretedDate = new Date(excelDate.y, excelDate.m - 1, excelDate.d);
-      } else if (typeof rawFecha === 'string') {
-        interpretedDate = parse(rawFecha, 'yyyy-MM-dd', new Date());
-      } else {
-        interpretedDate = rawFecha;
-      }
-
-      const rowDate = format(interpretedDate, 'yyyy-MM-dd');
+      const rowDate = format(findRowDate(r['Fecha']), 'yyyy-MM-dd');
       return rowDate === targetDate;
     });
 
@@ -59,10 +40,32 @@ function checkAvailability(dateString) {
     });
 
     if (disponibles.length === 0) {
-      return `Para el ${dateString}, todos los domos están reservados. 😕`;
-    } else {
-      return `Para el ${dateString}, están disponibles: ${disponibles.join(', ')}. ¿Querés que te comparta el link para reservar?`;
+      // Buscar hasta 3 fechas próximas con disponibilidad
+      const alternativas = [];
+
+      for (const r of data) {
+        const rowDate = format(findRowDate(r['Fecha']), 'yyyy-MM-dd');
+        if (rowDate <= targetDate) continue;
+
+        const libres = Object.keys(r).filter(col =>
+          col !== 'Fecha' && (!r[col] || r[col].toString().trim() === '')
+        );
+
+        if (libres.length > 0) {
+          alternativas.push(rowDate);
+        }
+
+        if (alternativas.length >= 3) break;
+      }
+
+      if (alternativas.length === 0) {
+        return `Para el ${dateString}, todos los domos están reservados. 😕`;
+      }
+
+      return `Para el ${dateString}, todos los domos están reservados. 😕 Pero tengo disponibilidad para: ${alternativas.join(', ')}. ¿Querés que te pase el link para reservar?`;
     }
+
+    return `Para el ${dateString}, están disponibles: ${disponibles.join(', ')}. ¿Querés que te comparta el link para reservar?`;
 
   } catch (error) {
     console.error('❌ Error leyendo el archivo de reservas:', error);
