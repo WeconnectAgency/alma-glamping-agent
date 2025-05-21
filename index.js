@@ -103,6 +103,24 @@ app.post('/mensaje', async (req, res) => {
   }
 
   // 🧠 Si no es consulta directa de fecha, generar respuesta con OpenAI
+  const dateMatch = userMessage.match(/\d{4}-\d{2}-\d{2}/);
+
+if (dateMatch) {
+  sessionMemory[userId].lastDate = dateMatch[0];
+}
+if (
+  userMessage.toLowerCase().includes('otra fecha') ||
+  userMessage.toLowerCase().includes('cerca de esa') ||
+  userMessage.toLowerCase().includes('otra opción') ||
+  userMessage.toLowerCase().includes('algo disponible')
+) {
+  const rememberedDate = sessionMemory[userId].lastDate;
+  if (rememberedDate) {
+    const disponibilidad = checkAvailability(rememberedDate);
+    return res.json({ reply: disponibilidad });
+  }
+}
+
   try {
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
