@@ -77,6 +77,10 @@ app.post('/mensaje', async (req, res) => {
     sessionMemory[userId] = [];
   }
 
+  if (!sessionMemory[userId].history) {
+    sessionMemory[userId].history = {};
+  }
+
   sessionMemory[userId].push({ role: 'user', content: userMessage });
 
   // 📅 Detectar fechas naturales y estructuradas
@@ -98,28 +102,28 @@ app.post('/mensaje', async (req, res) => {
 
   // ✅ Ejecutar disponibilidad si aplica
   if (parsedDate && tieneIntencion) {
+    sessionMemory[userId].history.lastDate = parsedDate;
     const disponibilidad = checkAvailability(parsedDate);
     return res.json({ reply: disponibilidad });
   }
 
-  // 🧠 Si no es consulta directa de fecha, generar respuesta con OpenAI
-  const dateMatch = userMessage.match(/\d{4}-\d{2}-\d{2}/);
-
-if (dateMatch) {
-  sessionMemory[userId].lastDate = dateMatch[0];
-}
-if (
-  userMessage.toLowerCase().includes('otra fecha') ||
-  userMessage.toLowerCase().includes('cerca de esa') ||
-  userMessage.toLowerCase().includes('otra opción') ||
-  userMessage.toLowerCase().includes('algo disponible')
-) {
-  const rememberedDate = sessionMemory[userId].lastDate;
-  if (rememberedDate) {
-    const disponibilidad = checkAvailability(rememberedDate);
-    return res.json({ reply: disponibilidad });
+  // 🧠 Si no es consulta directa de fecha, responder con fecha anterior si aplica
+  if (
+    lower.includes('otra fecha') ||
+    lower.includes('cerca de esa') ||
+    lower.includes('otra opción') ||
+    lower.includes('algo disponible') ||
+    lower.includes('fecha similar') ||
+    lower.includes('parecida')
+  ) {
+    const rememberedDate = sessionMemory[userId].history.lastDate;
+    if (rememberedDate) {
+      const disponibilidad = checkAvailability(rememberedDate);
+      return res.json({
+        reply: `Como me consultaste antes por el ${rememberedDate}, te cuento lo que encontré:\n\n${disponibilidad}`,
+      });
+    }
   }
-}
 
   try {
     const response = await axios.post(
