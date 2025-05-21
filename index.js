@@ -67,13 +67,10 @@ REGLAS DE COMPORTAMIENTO:
 ⚠️ Nunca fuerces la reserva. Leés la intención y acompañás con naturalidad.
 `;
 
-
-
 const sessionMemory = {};
 
 app.post('/mensaje', async (req, res) => {
   const userMessage = req.body.message || '';
-  
   const userId = req.body.userId || 'cliente';
 
   if (!sessionMemory[userId]) {
@@ -81,41 +78,66 @@ app.post('/mensaje', async (req, res) => {
   }
 
   sessionMemory[userId].push({ role: 'user', content: userMessage });
-const dateMatch = userMessage.match(/\d{4}-\d{2}-\d{2}/);
 
-if (userMessage.toLowerCase().includes('disponibilidad') && dateMatch) {
-  const fecha = dateMatch[0];
-  const disponibilidad = checkAvailability(fecha);
-  return res.json({ reply: disponibilidad });
-}
+  // 📅 Detectar fechas naturales y estructuradas
+  let parsedDate = parseNaturalDate(userMessage);
+  if (!parsedDate) {
+    const strictMatch = userMessage.match(/\d{4}-\d{2}-\d{2}/);
+    parsedDate = strictMatch ? strictMatch[0] : null;
+  }
 
+  // 🤖 Detectar intención de disponibilidad aunque no diga “disponibilidad”
+  const lower = userMessage.toLowerCase();
+  const contieneFechaNatural = /\d{1,2}\s*de\s*\w+/i.test(userMessage);
+  const tieneIntencion =
+    lower.includes('disponibilidad') ||
+    lower.includes('fecha') ||
+    lower.includes('reservar') ||
+    lower.includes('libre') ||
+    contieneFechaNatural;
+
+  // ✅ Ejecutar disponibilidad si aplica
+  if (parsedDate && tieneIntencion) {
+    const disponibilidad = checkAvailability(parsedDate);
+    return res.json({ reply: disponibilidad });
+  }
+
+  // 🧠 Si no es consulta directa de fecha, generar respuesta con OpenAI
   try {
-    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...sessionMemory[userId]
-      ],
-      temperature: 0.7
-    }, {
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          ...sessionMemory[userId],
+        ],
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
       }
-    });
+    );
 
     let botReply = response.data.choices[0].message.content;
 
-    const alreadyGreeted = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola 👋'));
-const isFirstAssistantMessage = sessionMemory[userId].filter(m => m.role === 'assistant').length === 0;
+    // 👋 Saludo inteligente
+    const alreadyGreeted = sessionMemory[userId].some(
+      m => m.role === 'assistant' && m.content.includes('Hola 👋')
+    );
+    const isFirstAssistantMessage = sessionMemory[userId].filter(
+      m => m.role === 'assistant'
+    ).length === 0;
 
-if (isFirstAssistantMessage && !alreadyGreeted) {
-  botReply = `Hola 👋 Qué gusto tenerte por acá. ${botReply}`;
-}
+    if (isFirstAssistantMessage && !alreadyGreeted) {
+      botReply = `Hola 👋 Qué gusto tenerte por acá. ${botReply}`;
+    }
 
     sessionMemory[userId].push({ role: 'assistant', content: botReply });
     res.json({ reply: botReply });
-
   } catch (error) {
     console.error('Error al consultar OpenAI:', error.message);
     console.error('Detalle completo:', error.response?.data || error);
