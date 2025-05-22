@@ -169,7 +169,8 @@ app.post('/mensaje', async (req, res) => {
 
   if (parsedDate && tieneIntencionGeneral) {
   sessionMemory[userId].history.lastDate = parsedDate;
-  const disponibilidad = checkAvailability(parsedDate);
+  const { isDateAvailable } = require('./checkAvailability');
+  const disponibilidad = isDateAvailable(parsedDate);
   const alreadyGreeted = sessionMemory[userId].some(
     m => m.role === 'assistant' && m.content.includes('Hola 👋')
   );

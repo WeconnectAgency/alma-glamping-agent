@@ -8,6 +8,32 @@ function formatearFechaNatural(dateString) {
   const parsedDate = parse(dateString, 'yyyy-MM-dd', new Date());
   return format(parsedDate, "d 'de' MMMM", { locale: es });
 }
+function isDateAvailable(dateStr) {
+  const workbook = XLSX.readFile(FILE_PATH);
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const data = XLSX.utils.sheet_to_json(sheet);
+
+  const targetDate = format(parse(dateStr, 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
+
+  const row = data.find(r => {
+    if (!r['Fecha']) return false;
+    let rowDate;
+    if (typeof r['Fecha'] === 'string') {
+      rowDate = format(parse(r['Fecha'], 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
+    } else {
+      rowDate = format(new Date((r['Fecha'] - 25569) * 86400 * 1000), 'yyyy-MM-dd');
+    }
+    return rowDate === targetDate;
+  });
+
+  if (!row) return false;
+
+  const disponibles = Object.keys(row).filter(
+    col => col !== 'Fecha' && (!row[col] || row[col].toString().trim() === '')
+  );
+
+  return disponibles.length > 0;
+}
 
 function checkAvailability(dateString) {
   try {
@@ -121,5 +147,7 @@ function checkAvailabilityRange(startDate, endDate) {
 
 module.exports = {
   checkAvailability,
+  isDateAvailable,
   checkAvailabilityRange
 };
+
