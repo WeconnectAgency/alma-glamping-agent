@@ -19,7 +19,12 @@ function checkAvailability(dateString) {
     const fechaBonita = formatearFechaNatural(targetDate);
 
     const row = data.find(r => {
-      const rowDate = format(new Date(r['Fecha']), 'yyyy-MM-dd');
+      const rowDate = format(
+  typeof r['Fecha'] === 'string'
+    ? parse(r['Fecha'], 'yyyy-MM-dd', new Date())
+    : new Date((r['Fecha'] - 25569) * 86400 * 1000),
+  'yyyy-MM-dd'
+);
       return rowDate === targetDate;
     });
 

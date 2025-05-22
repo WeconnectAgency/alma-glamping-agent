@@ -30,7 +30,20 @@ function checkAvailabilityRange(startDateStr, endDateStr) {
       current = addDays(current, 1)
     ) {
       const fechaStr = format(current, 'yyyy-MM-dd');
-      const row = data.find(r => format(new Date(r['Fecha']), 'yyyy-MM-dd') === fechaStr);
+
+      // ✅ Corrección robusta para leer la fecha
+      const row = data.find(r => {
+        if (!r['Fecha']) return false;
+
+        let rowDate;
+        if (typeof r['Fecha'] === 'string') {
+          rowDate = format(parse(r['Fecha'], 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
+        } else {
+          rowDate = format(new Date((r['Fecha'] - 25569) * 86400 * 1000), 'yyyy-MM-dd');
+        }
+
+        return rowDate === fechaStr;
+      });
 
       if (!row) continue;
 
