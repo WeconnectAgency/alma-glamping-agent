@@ -12,7 +12,7 @@ function esFinDeSemana(date) {
   return day === 5 || day === 6 || day === 0; // viernes, sábado, domingo
 }
 
-function sugerirAlternativa(dateStr) {
+function sugerirAlternativa(dateStr, userId, sessionMemory) {
   const date = parse(dateStr, 'yyyy-MM-dd', new Date());
   const dayOfWeek = getDay(date);
 
@@ -32,6 +32,7 @@ function sugerirAlternativa(dateStr) {
     }
 
     if (encontrada) {
+      sessionMemory[userId].history.ultimaFechaSugerida = encontrada;
       return `Ese finde está lleno 😢. Pero el próximo finde con disponibilidad es el ${formatToHuman(encontrada)}. ¿Querés que lo reservemos?`;
     }
 
