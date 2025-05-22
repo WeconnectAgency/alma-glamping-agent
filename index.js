@@ -16,14 +16,10 @@ app.use(bodyParser.json());
 
 const SYSTEM_PROMPT = `
 Eres AlmaBot, el agente conversacional de Alma Glamping, un glamping boutique ubicado en Escazú, Costa Rica.
-
 Tu personalidad es cálida, humana, profesional y empática. Te comunicas como una persona real, sin lenguaje técnico ni frases robóticas. Usás un tono relajado, inspirado, con buena vibra y conexión emocional.
-
 Tu propósito es acompañar e inspirar al visitante a reservar una estadía en Alma Glamping, mostrándole que, sin importar el clima, lo valioso es escapar del ruido del mundo.
-
 🎯 Tu objetivo:
 Guiar naturalmente hacia la reserva, sin sonar vendedor. Inspirar al usuario a imaginarse en Alma Glamping. Siempre respondés como si fueses parte del equipo, alguien que ya vivió la experiencia.
-
 🧠 Intenciones que debes detectar:
 - Curioso → responde con calidez e inspiración
 - Dudoso por clima → reencuadra emocionalmente (lluvia = magia, niebla = desconexión)
@@ -31,41 +27,35 @@ Guiar naturalmente hacia la reserva, sin sonar vendedor. Inspirar al usuario a i
 - Cliente frecuente → agradece y responde con tono familiar
 - Usuario romántico → enfoca en la intimidad y privacidad del domo
 - Usuario explorador → describe experiencia completa como desconexión del estrés urbano
-
 🌤️ Clima:
 Si el usuario menciona lluvia, niebla o clima feo, reencuadrá emocionalmente:
 “La lluvia no arruina la experiencia. La transforma. Imaginá el sonido sobre el domo, una copa de vino, sin tráfico, sin notificaciones...”
-
 🛏️ Tarifas:
 Contamos con 3 Domos Junior Suite y 1 Domo Suite. Todos con cama king, jacuzzi privado, fogata, minibar, A/C y desayuno. Tarifas fijas:
 - Junior Suite: $280 USD/noche
 - Suite: $300 USD/noche
-
 📍 Ubicación:
 Estamos a 4.4 km del Estadio Nacional, en las montañas de Escazú. Buscanos como “ALMA Glamping Escazú” en Google Maps o Waze.
-
 📅 Reservas:
 Si el usuario lo solicita, compartí el link de reservas limpio:
 https://www.simplebooking.it/ibe2/hotel/8772
-
 🎁 Servicios adicionales:
 Cena romántica, masajes, decoración especial, fotografía, letras “Cásate conmigo”. Si tienen una idea, decí: “Contame lo que tenés en mente y vemos cómo hacerlo realidad.”
-
 🐶 Políticas:
 - Aceptamos mascotas pequeñas
 - El pago es en línea
 - La política de cancelación se muestra al reservar
-
 ❓ Preguntas inusuales:
 Si preguntan cosas fuera de lo común (“¿Puedo llevar un león?”), respondé con humor y elegancia: “¡Qué pregunta tan original! 😅 No está permitido, pero si tenés otra duda real, contame.”
-
 REGLAS DE COMPORTAMIENTO:
 - No usés frases como “estoy para ayudarte” o “soy un modelo de lenguaje”.
 - Nunca digas que sos un bot.
 - No uses markdown como [enlace](url). Mostrá el link directamente.
+- Si previamente se indicó que no hay disponibilidad para una fecha específica, no ofrecés domos ni sugerís reservar para esa fecha.
+- En esos casos, ofrecé sugerencias naturales: por ejemplo, decir que se puede revisar fechas cercanas, preguntar si el usuario tiene flexibilidad, o proponer chequear juntos otra fecha disponible.
 - Si ya diste una respuesta similar en la sesión, retomá lo anterior sin repetirlo.
 - Si no sabés algo, decilo con honestidad y redirigí: “No tengo esa info exacta, pero podés consultarla por WhatsApp 👉 https://wa.link/r8p2rp”
-- Solo saludá con “Hola 👋 ” en la primera respuesta. No lo repitas si ya fue dicho antes en esta sesión.
+- Solo saludá con “Hola 👋” en la primera respuesta. No lo repitas si ya fue dicho antes en esta sesión.
 ⚠️ Nunca fuerces la reserva. Leés la intención y acompañás con naturalidad.
 `;
 
@@ -83,50 +73,32 @@ app.post('/mensaje', async (req, res) => {
   sessionMemory[userId].push({ role: 'user', content: userMessage });
   const lower = userMessage.toLowerCase();
 
-  // 🔎 Rango de fechas como “del 10 al 12 de julio”
+  const alreadyGreeted = sessionMemory[userId].some(
+    m => m.role === 'assistant' && m.content.includes('Hola 👋')
+  );
+  const isFirstAssistantMessage = sessionMemory[userId].filter(
+    m => m.role === 'assistant'
+  ).length === 0;
+  const saludo = isFirstAssistantMessage && !alreadyGreeted ? 'Hola 👋 ' : '';
+
+  // 🔎 Rango de fechas
   const rangoFechas = parseDateRange(userMessage);
   if (rangoFechas) {
     sessionMemory[userId].history.lastDateRange = rangoFechas;
     const disponibilidad = checkAvailabilityRange(rangoFechas.start, rangoFechas.end);
-    const alreadyGreeted = sessionMemory[userId].some(
-  m => m.role === 'assistant' && m.content.includes('Hola 👋')
-);
-const isFirstAssistantMessage = sessionMemory[userId].filter(
-  m => m.role === 'assistant'
-).length === 0;
-
-if (isFirstAssistantMessage && !alreadyGreeted) {
-  return res.json({ reply: `Hola 👋  ${disponibilidad}` });
-} else {
-  return res.json({ reply: disponibilidad });
-}
-
+    return res.json({ reply: `${saludo}${disponibilidad}` });
   }
 
-  // 📆 Fin de semana (viernes a domingo)
+  // 📆 Fin de semana
   if (lower.includes('fin de semana')) {
     const today = new Date();
-    const dayOfWeek = today.getDay();
-    const daysUntilFriday = (5 - dayOfWeek + 7) % 7;
-    const friday = addDays(today, daysUntilFriday);
+    const friday = addDays(today, (5 - today.getDay() + 7) % 7);
     const sunday = addDays(friday, 2);
     const disponibilidad = checkAvailabilityRange(
       format(friday, 'yyyy-MM-dd'),
       format(sunday, 'yyyy-MM-dd')
     );
-    const alreadyGreeted = sessionMemory[userId].some(
-  m => m.role === 'assistant' && m.content.includes('Hola 👋')
-);
-const isFirstAssistantMessage = sessionMemory[userId].filter(
-  m => m.role === 'assistant'
-).length === 0;
-
-if (isFirstAssistantMessage && !alreadyGreeted) {
-  return res.json({ reply: `Hola 👋, ${disponibilidad}` });
-} else {
-  return res.json({ reply: disponibilidad });
-}
-
+    return res.json({ reply: `${saludo}${disponibilidad}` });
   }
 
   // 📅 Fecha puntual
@@ -149,22 +121,11 @@ if (isFirstAssistantMessage && !alreadyGreeted) {
   if (parsedDate && tieneIntencion) {
     sessionMemory[userId].history.lastDate = parsedDate;
     const disponibilidad = checkAvailability(parsedDate);
-    const alreadyGreeted = sessionMemory[userId].some(
-  m => m.role === 'assistant' && m.content.includes('Hola 👋')
-);
-const isFirstAssistantMessage = sessionMemory[userId].filter(
-  m => m.role === 'assistant'
-).length === 0;
-
-if (isFirstAssistantMessage && !alreadyGreeted) {
-  return res.json({ reply: `Hola 👋, ${disponibilidad}` });
-} else {
-  return res.json({ reply: disponibilidad });
-}
-
+    sessionMemory[userId].history.lastAvailabilityResponse = disponibilidad;
+    return res.json({ reply: `${saludo}${disponibilidad}` });
   }
 
-  // 🔁 Si dicen “otra fecha”, usamos la última mencionada
+  // 🔁 Seguimiento con “otra fecha”
   if (
     lower.includes('otra fecha') ||
     lower.includes('cerca de esa') ||
@@ -177,12 +138,12 @@ if (isFirstAssistantMessage && !alreadyGreeted) {
     if (rememberedDate) {
       const disponibilidad = checkAvailability(rememberedDate);
       return res.json({
-        reply: `Como me consultaste antes por el ${rememberedDate}, te cuento lo que encontré:\n\n${disponibilidad}`,
+        reply: `${saludo}Como me consultaste antes por el ${rememberedDate}, te cuento lo que encontré:\n\n${disponibilidad}`,
       });
     }
   }
 
-  // 🤖 Consulta general (sin intención de fecha)
+  // 🤖 General
   try {
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
@@ -204,13 +165,14 @@ if (isFirstAssistantMessage && !alreadyGreeted) {
 
     let botReply = response.data.choices[0].message.content;
 
-    // 👋 Saludo único en la primera interacción
-    const alreadyGreeted = sessionMemory[userId].some(
-      m => m.role === 'assistant' && m.content.includes('Hola 👋')
-    );
-    const isFirstAssistantMessage = sessionMemory[userId].filter(
-      m => m.role === 'assistant'
-    ).length === 0;
+    const lastAvailability = sessionMemory[userId].history.lastAvailabilityResponse || '';
+    const noDisponibilidad = lastAvailability.includes('todos los domos están reservados');
+
+    if (noDisponibilidad && lower.includes('quiero reservar')) {
+      return res.json({
+        reply: `${saludo}Entiendo que querés reservar, pero la fecha que consultaste no tiene domos disponibles. ¿Querés que te sugiera otras fechas cercanas con disponibilidad?`,
+      });
+    }
 
     if (isFirstAssistantMessage && !alreadyGreeted) {
       botReply = `Hola 👋 Qué gusto tenerte por acá. ${botReply}`;
