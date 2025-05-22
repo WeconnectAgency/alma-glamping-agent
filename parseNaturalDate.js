@@ -1,31 +1,42 @@
-const { format, addDays, nextSaturday, parse } = require('date-fns');
+const { format, addDays, getDay, parse } = require('date-fns');
+const { es } = require('date-fns/locale');
+
+function normalizarTexto(text) {
+  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
 
 function parseNaturalDate(text) {
-  const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
+  const lower = normalizarTexto(text);
   const today = new Date();
 
-  if (lower.includes('hoy')) {
-    return format(today, 'yyyy-MM-dd');
-  }
+  // Hoy, mañana, pasado mañana
+  if (lower.includes('hoy')) return format(today, 'yyyy-MM-dd');
+  if (lower.includes('mañana')) return format(addDays(today, 1), 'yyyy-MM-dd');
+  if (lower.includes('pasado mañana')) return format(addDays(today, 2), 'yyyy-MM-dd');
 
-  if (lower.includes('mañana')) {
-    return format(addDays(today, 1), 'yyyy-MM-dd');
-  }
-
-  if (lower.includes('pasado mañana')) {
-    return format(addDays(today, 2), 'yyyy-MM-dd');
-  }
-
+  // Fin de semana (viernes a domingo)
   if (lower.includes('fin de semana')) {
-    return format(nextSaturday(today), 'yyyy-MM-dd');
+    const day = today.getDay();
+    const daysUntilFriday = (5 - day + 7) % 7;
+    const friday = addDays(today, daysUntilFriday);
+    return format(friday, 'yyyy-MM-dd');
   }
 
-  // Detecta: “14 de junio”
-  const fullDateMatch = lower.match(/(\d{1,2})\s+de\s+([a-z]+)/i);
-  if (fullDateMatch) {
-    const day = parseInt(fullDateMatch[1]);
-    const monthName = fullDateMatch[2];
+  // Día de la semana ("el sábado", "el domingo")
+  const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  for (let i = 0; i < dias.length; i++) {
+    if (lower.includes(`el ${dias[i]}`)) {
+      const dayDiff = (i - today.getDay() + 7) % 7 || 7;
+      const nextDay = addDays(today, dayDiff);
+      return format(nextDay, 'yyyy-MM-dd');
+    }
+  }
+
+  // Frases como "14 de junio" o "1ro de julio"
+  const match = lower.match(/(\d{1,2}|1ro)\s+de\s+([a-záéíóú]+)/i);
+  if (match) {
+    let day = match[1] === '1ro' ? 1 : parseInt(match[1]);
+    const monthName = match[2];
     const monthMap = {
       enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
       julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
@@ -33,26 +44,22 @@ function parseNaturalDate(text) {
     const monthIndex = monthMap[monthName];
     if (monthIndex !== undefined) {
       const year = today.getFullYear();
-      const date = new Date(year, monthIndex, day);
-      return format(date, 'yyyy-MM-dd');
+      const parsed = new Date(year, monthIndex, day);
+      return format(parsed, 'yyyy-MM-dd');
     }
   }
 
-  // Detecta: “el 14”, “para el 20”, etc.
-  const dayOnlyMatch = lower.match(/\b(?:el|para|hacia|en)\s+(\d{1,2})\b/);
-  if (dayOnlyMatch) {
-    const day = parseInt(dayOnlyMatch[1]);
-    const currentMonth = today.getMonth();
-    const year = today.getFullYear();
-    const date = new Date(year, currentMonth, day);
-
-    // Si la fecha ya pasó este mes, ir al próximo
-    if (date < today) {
-      const nextMonthDate = new Date(year, currentMonth + 1, day);
-      return format(nextMonthDate, 'yyyy-MM-dd');
+  // Frases como "el 24"
+  const simpleMatch = lower.match(/\bel\s*(\d{1,2})\b/);
+  if (simpleMatch) {
+    const day = parseInt(simpleMatch[1]);
+    const thisMonth = new Date(today.getFullYear(), today.getMonth(), day);
+    if (thisMonth >= today) {
+      return format(thisMonth, 'yyyy-MM-dd');
+    } else {
+      const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, day);
+      return format(nextMonth, 'yyyy-MM-dd');
     }
-
-    return format(date, 'yyyy-MM-dd');
   }
 
   return null;
