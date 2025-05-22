@@ -1,82 +1,148 @@
-const { parse, format, addDays, getDay, subDays, isValid } = require('date-fns');
+const { parse, format, addDays, getDay, subDays, isValid, isAfter } = require('date-fns');
 const { es } = require('date-fns/locale');
-const { isDateAvailable, getDomosDisponibles } = require('./checkAvailability');
+const XLSX = require('xlsx');
 
-// Configuración modificable
-const CONFIG = {
-  DIAS_BUSQUEDA_FINDE: 60,
-  DIAS_BUSQUEDA_SEMANA: 5,
-  DIAS_ALTERNATIVAS_A_MOSTRAR: 3 // Mostrar varias opciones
+// 1. Sistema de Caché
+const CACHE = {
+  data: null,
+  lastUpdated: null,
+  filePath: './Reservas_Alma_Glamping.xlsx',
+  ttl: 5 * 60 * 1000, // 5 minutos en milisegundos
+  maxSize: 1000 // Máximo de registros en caché
 };
 
-function formatToHuman(dateStr) {
-  const date = parse(dateStr, 'yyyy-MM-dd', new Date());
-  return isValid(date) ? format(date, "d 'de' MMMM", { locale: es }) : dateStr;
+async function loadDataWithCache() {
+  const now = new Date();
+  
+  // Verificar si el caché es válido
+  if (CACHE.data && CACHE.lastUpdated && 
+      (now - CACHE.lastUpdated) < CACHE.ttl) {
+    return CACHE.data;
+  }
+
+  try {
+    console.log('📂 Actualizando caché de reservas...');
+    const workbook = XLSX.readFile(CACHE.filePath);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rawData = XLSX.utils.sheet_to_json(sheet);
+    
+    // Procesamiento optimizado de datos
+    CACHE.data = rawData.map(row => {
+      let fecha;
+      if (typeof row.Fecha === 'string') {
+        fecha = parse(row.Fecha, 'yyyy-MM-dd', new Date());
+      } else {
+        fecha = new Date((row.Fecha - 25569) * 86400 * 1000);
+      }
+      
+      return {
+        ...row,
+        parsedDate: isValid(fecha) ? format(fecha, 'yyyy-MM-dd') : null,
+        domos: Object.entries(row)
+          .filter(([key]) => key !== 'Fecha')
+          .reduce((acc, [key, val]) => ({
+            ...acc,
+            [key]: val?.toString().trim().toLowerCase() === 'disponible'
+          }), {})
+      };
+    }).filter(item => item.parsedDate);
+    
+    CACHE.lastUpdated = now;
+    return CACHE.data;
+    
+  } catch (error) {
+    console.error('Error al cargar datos:', error);
+    throw new Error('No se pudo cargar el archivo de reservas');
+  }
 }
 
-function esFinDeSemana(date) {
-  const day = getDay(date);
-  return day === 5 || day === 6 || day === 0; // viernes, sábado, domingo
+// 2. Funciones Optimizadas con Caché
+async function isDateAvailableWithCache(dateStr) {
+  const data = await loadDataWithCache();
+  const item = data.find(d => d.parsedDate === dateStr);
+  return item ? Object.values(item.domos).some(Boolean) : false;
 }
 
+async function getDomosDisponiblesWithCache(dateStr) {
+  const data = await loadDataWithCache();
+  const item = data.find(d => d.parsedDate === dateStr);
+  if (!item) return [];
+  
+  return Object.entries(item.domos)
+    .filter(([_, disponible]) => disponible)
+    .map(([domo]) => domo);
+}
+
+// 3. Versión Mejorada de sugerirAlternativa con Caché
 async function sugerirAlternativa(dateStr, userId, sessionMemory) {
   try {
     const date = parse(dateStr, 'yyyy-MM-dd', new Date());
-    if (!isValid(date)) {
-      throw new Error('Fecha inválida');
+    if (!isValid(date)) throw new Error('Fecha inválida');
+
+    const [disponible, alternativas] = await Promise.all([
+      isDateAvailableWithCache(dateStr),
+      buscarAlternativas(date, sessionMemory)
+    ]);
+
+    if (disponible) {
+      return `¡Buenas noticias! El ${formatToHuman(dateStr)} sigue disponible. ¿Querés reservar?`;
     }
 
-    const esFinde = esFinDeSemana(date);
-    const diasABuscar = esFinde ? CONFIG.DIAS_BUSQUEDA_FINDE : CONFIG.DIAS_BUSQUEDA_SEMANA;
-    const alternativas = [];
+    if (alternativas.length === 0) {
+      return esFinDeSemana(date)
+        ? `Ese finde está completo 😢. ¿Querés que busque en otro mes?`
+        : `No hay disponibilidad cercana. ¿Qué otra fecha te interesa?`;
+    }
 
-    // Buscar hacia adelante y atrás
-    for (let i = 1; i <= diasABuscar && alternativas.length < CONFIG.DIAS_ALTERNATIVAS_A_MOSTRAR; i++) {
-      const testForward = addDays(date, i);
-      const testBackward = subDays(date, i);
+    sessionMemory[userId].history.ultimasFechasSugeridas = alternativas;
+    
+    const mensajeBase = esFinDeSemana(date)
+      ? `Ese finde está completo. Te sugiero:\n`
+      : `Esa fecha no está disponible. Podés elegir:\n`;
 
-      for (const testDate of [testForward, testBackward]) {
-        if ((esFinde && !esFinDeSemana(testDate)) continue;
+    const opciones = alternativas.map((alt, i) => 
+      `${i+1}. ${alt.fecha} (${alt.domos.join(', ')})`
+    ).join('\n');
+
+    return `${mensajeBase}${opciones}\n\nDecime el número de tu preferencia.`;
+
+  } catch (error) {
+    console.error('Error:', error);
+    return 'Hubo un problema al buscar fechas. ¿Podrías intentarlo de nuevo?';
+  }
+}
+
+// Función auxiliar para buscar alternativas
+async function buscarAlternativas(date, sessionMemory) {
+  const esFinde = esFinDeSemana(date);
+  const config = {
+    diasBusqueda: esFinde ? 60 : 14,
+    maxAlternativas: 3,
+    buscarAtras: true
+  };
+
+  const alternativas = [];
+  const hoy = new Date();
+
+  for (let i = 1; i <= config.diasBusqueda && alternativas.length < config.maxAlternativas; i++) {
+    const fechasAProbar = [addDays(date, i)];
+    if (config.buscarAtras) fechasAProbar.push(subDays(date, i));
+
+    for (const fecha of fechasAProbar) {
+      if (isAfter(fecha, hoy)) { // No sugerir fechas pasadas
+        const fechaStr = format(fecha, 'yyyy-MM-dd');
+        const mismoTipo = esFinde ? esFinDeSemana(fecha) : !esFinDeSemana(fecha);
         
-        const fechaStr = format(testDate, 'yyyy-MM-dd');
-        if (isDateAvailable(fechaStr)) {
-          const domos = getDomosDisponibles(fechaStr);
+        if (mismoTipo && await isDateAvailableWithCache(fechaStr)) {
           alternativas.push({
-            fecha: fechaStr,
-            label: formatToHuman(fechaStr),
-            domos
+            fecha: formatToHuman(fechaStr),
+            fechaStr,
+            domos: await getDomosDisponiblesWithCache(fechaStr)
           });
         }
       }
     }
-
-    if (alternativas.length === 0) {
-      return esFinde 
-        ? `Ese finde está lleno 😢 y no encontré otros con espacio. ¿Querés que revisemos otro mes?`
-        : `No hay disponibilidad cercana. ¿Buscás otra fecha?`;
-    }
-
-    // Guardar todas las alternativas en sesión, no solo la primera
-    sessionMemory[userId].history.ultimasFechasSugeridas = alternativas;
-
-    const mensajeBase = esFinde
-      ? `Ese finde está lleno. Te sugiero:\n`
-      : `Ese día no está disponible. Podrías considerar:\n`;
-
-    const opciones = alternativas.map((alt, idx) => 
-      `${idx + 1}. ${alt.label} (${alt.domos.join(', ')})`
-    ).join('\n');
-
-    return `${mensajeBase}${opciones}\n\n¿Te interesa alguna? Responde con el número.`;
-    
-  } catch (error) {
-    console.error('Error en sugerirAlternativa:', error);
-    return 'Hubo un problema al buscar alternativas. ¿Podrías confirmar la fecha?';
   }
-}
 
-module.exports = {
-  sugerirAlternativa,
-  formatToHuman,
-  CONFIG // Exportar configuración para tests
-};
+  return alternativas;
+}

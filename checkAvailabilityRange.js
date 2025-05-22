@@ -1,74 +1,148 @@
 const XLSX = require('xlsx');
-const { parse, format, addDays, isAfter } = require('date-fns');
+const { parse, format, addDays, isAfter, isValid, eachDayOfInterval } = require('date-fns');
 const { es } = require('date-fns/locale');
 
-const FILE_PATH = './Reservas_Alma_Glamping.xlsx';
+// 1. Sistema de Caché
+const CACHE = {
+  data: null,
+  lastUpdated: null,
+  filePath: './Reservas_Alma_Glamping.xlsx',
+  ttl: 5 * 60 * 1000 // 5 minutos
+};
 
-function formatToHuman(dateStr) {
-  const date = parse(dateStr, 'yyyy-MM-dd', new Date());
-  return format(date, "d 'de' MMMM", { locale: es });
-}
+async function loadData() {
+  const now = new Date();
+  if (CACHE.data && (now - CACHE.lastUpdated) < CACHE.ttl) {
+    return CACHE.data;
+  }
 
-function checkAvailabilityRange(startDateStr, endDateStr) {
   try {
-    const workbook = XLSX.readFile(FILE_PATH);
+    console.log('🔄 Actualizando caché de reservas...');
+    const workbook = XLSX.readFile(CACHE.filePath);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(sheet);
+    const rawData = XLSX.utils.sheet_to_json(sheet);
 
-    const start = parse(startDateStr, 'yyyy-MM-dd', new Date());
-    const end = parse(endDateStr, 'yyyy-MM-dd', new Date());
+    CACHE.data = rawData.map(row => ({
+      ...row,
+      parsedDate: parseExcelDate(row.Fecha),
+      disponibilidad: getDisponibilidad(row)
+    })).filter(item => item.parsedDate);
 
-    if (isAfter(start, end)) {
-      return 'La fecha de inicio no puede ser posterior a la fecha final. 😅';
-    }
-
-    const disponibles = [];
-
-    for (
-      let current = start;
-      !isAfter(current, end);
-      current = addDays(current, 1)
-    ) {
-      const fechaStr = format(current, 'yyyy-MM-dd');
-
-      // ✅ Corrección robusta para leer la fecha
-      const row = data.find(r => {
-        if (!r['Fecha']) return false;
-
-        let rowDate;
-        if (typeof r['Fecha'] === 'string') {
-          rowDate = format(parse(r['Fecha'], 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
-        } else {
-          rowDate = format(new Date((r['Fecha'] - 25569) * 86400 * 1000), 'yyyy-MM-dd');
-        }
-
-        return rowDate === fechaStr;
-      });
-
-      if (!row) continue;
-
-      const domosDisponibles = Object.keys(row).filter(
-        col => col !== 'Fecha' && (!row[col] || row[col].toString().trim() === '')
-      );
-
-      if (domosDisponibles.length > 0) {
-        disponibles.push({
-          fecha: formatToHuman(fechaStr),
-          domos: domosDisponibles
-        });
-      }
-    }
-
-    if (disponibles.length === 0) {
-      return `Entre el ${formatToHuman(startDateStr)} y el ${formatToHuman(endDateStr)} no hay disponibilidad en ningún domo. 😔 Si tenés flexibilidad en tus fechas, puedo ayudarte a buscar otras opciones.`;
-    }
-
-    const lista = disponibles.map(d => `• ${d.fecha}: ${d.domos.join(', ')}`).join('\n');
-    return `Encontré disponibilidad entre esas fechas 🎉:\n\n${lista}\n\n¿Querés que te comparta el link para reservar alguna?`;
+    CACHE.lastUpdated = now;
+    return CACHE.data;
   } catch (error) {
-    console.error('Error al leer Excel para rango de fechas:', error);
-    return 'Hubo un problema al revisar el rango de fechas. 😕';
+    console.error('Error al cargar datos:', error);
+    throw new Error('No se pudo cargar el archivo de reservas');
   }
 }
 
-module.exports = checkAvailabilityRange;
+// 2. Funciones auxiliares
+function parseExcelDate(excelDate) {
+  if (!excelDate) return null;
+  try {
+    const date = typeof excelDate === 'string' 
+      ? parse(excelDate, 'yyyy-MM-dd', new Date())
+      : new Date((excelDate - 25569) * 86400 * 1000);
+    return isValid(date) ? format(date, 'yyyy-MM-dd') : null;
+  } catch {
+    return null;
+  }
+}
+
+function getDisponibilidad(row) {
+  return Object.entries(row)
+    .filter(([key]) => key !== 'Fecha')
+    .reduce((acc, [domo, estado]) => ({
+      ...acc,
+      [domo]: !estado || estado.toString().trim() === ''
+    }), {});
+}
+
+function formatToHuman(dateStr) {
+  const date = parse(dateStr, 'yyyy-MM-dd', new Date());
+  return isValid(date) ? format(date, "d 'de' MMMM", { locale: es }) : dateStr;
+}
+
+// 3. Función principal mejorada
+async function checkAvailabilityRange(startDateStr, endDateStr, userId = null, sessionMemory = null) {
+  try {
+    // Validación de fechas
+    const start = parse(startDateStr, 'yyyy-MM-dd', new Date());
+    const end = parse(endDateStr, 'yyyy-MM-dd', new Date());
+    
+    if (!isValid(start) || !isValid(end)) {
+      return { error: 'Formato de fecha inválido. Usa YYYY-MM-DD' };
+    }
+    if (isAfter(start, end)) {
+      return { error: 'La fecha de inicio no puede ser posterior a la fecha final. 😅' };
+    }
+
+    // Cargar datos (con caché)
+    const data = await loadData();
+    const fechas = eachDayOfInterval({ start, end });
+    
+    // Procesar disponibilidad
+    const resultados = fechas.map(fecha => {
+      const fechaStr = format(fecha, 'yyyy-MM-dd');
+      const item = data.find(d => d.parsedDate === fechaStr);
+      
+      if (!item) return null;
+      
+      const domosDisponibles = Object.entries(item.disponibilidad)
+        .filter(([_, disponible]) => disponible)
+        .map(([domo]) => domo);
+      
+      return {
+        fecha: fechaStr,
+        label: formatToHuman(fechaStr),
+        domos: domosDisponibles,
+        disponible: domosDisponibles.length > 0
+      };
+    }).filter(Boolean);
+
+    // Formatear respuesta
+    const disponibles = resultados.filter(r => r.disponible);
+    const noDisponibles = resultados.filter(r => !r.disponible);
+
+    if (disponibles.length === 0) {
+      const mensaje = `Entre el ${formatToHuman(startDateStr)} y el ${formatToHuman(endDateStr)} no hay disponibilidad. 😔`;
+      const sugerencia = await generarSugerencias(start, end, userId, sessionMemory);
+      return { 
+        error: mensaje,
+        sugerencia 
+      };
+    }
+
+    // Guardar contexto si hay sesión
+    if (userId && sessionMemory) {
+      sessionMemory[userId].lastSearch = {
+        start: startDateStr,
+        end: endDateStr,
+        results: disponibles
+      };
+    }
+
+    return {
+      success: true,
+      period: `${formatToHuman(startDateStr)} al ${formatToHuman(endDateStr)}`,
+      disponibles,
+      resumen: `🎉 ${disponibles.length} días disponibles de ${resultados.length}`
+    };
+
+  } catch (error) {
+    console.error('Error en checkAvailabilityRange:', error);
+    return { error: 'Error al consultar disponibilidad. Intenta nuevamente.' };
+  }
+}
+
+// 4. Función para sugerencias automáticas
+async function generarSugerencias(start, end, userId, sessionMemory) {
+  // Lógica para buscar fechas alternativas cercanas
+  // Puede usar similar a sugerirAlternativa.js
+  return '¿Querés que busque fechas alternativas?';
+}
+
+module.exports = {
+  checkAvailabilityRange,
+  loadData // Exportado para testing
+};

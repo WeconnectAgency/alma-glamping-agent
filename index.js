@@ -14,6 +14,8 @@ const app = express();
 app.use(cors());
 const port = process.env.PORT || 3000;
 app.use(bodyParser.json());
+
+
 const SYSTEM_PROMPT = `
 Eres Alma, el agente conversacional de Alma Glamping, un glamping boutique ubicado en Escazú, Costa Rica.
 
@@ -82,12 +84,20 @@ Si alguien propone una idea nueva, respondé: “Contame lo que tenés en mente 
 - Romántico → tono íntimo y emocional.
 - Explorador → tono aventurero y relajado.
 - Práctico → tono directo, sin adornos.
-`;
+`;      
 const sessionMemory = {};
 
 app.post('/mensaje', async (req, res) => {
   const userMessage = req.body.message || '';
   const userId = req.body.userId || 'cliente';
+  // 📅 Fecha puntual o ambigua
+let parsedDate = parseNaturalDate(userMessage);
+if (parsedDate && parsedDate.needsConfirmation) {
+  sessionMemory[userId].history.fechaAmbigua = parsedDate;
+  const opciones = parsedDate.options.map(opt => opt.label).join(' o ');
+  return res.json({ reply: `¿Te referís al ${opciones}?` });
+}
+
 
   if (!sessionMemory[userId]) {
     sessionMemory[userId] = [];
@@ -97,119 +107,128 @@ app.post('/mensaje', async (req, res) => {
   sessionMemory[userId].push({ role: 'user', content: userMessage });
   const lower = userMessage.toLowerCase();
 
-  // 🔎 Rango de fechas como “del 10 al 12 de julio”
-  const rangoFechas = parseDateRange(userMessage);
-  if (rangoFechas) {
-    sessionMemory[userId].history.lastDateRange = rangoFechas;
-    const disponibilidad = checkAvailabilityRange(rangoFechas.start, rangoFechas.end);
-    const alreadyGreeted = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola 👋'));
-    const isFirstAssistantMessage = sessionMemory[userId].filter(m => m.role === 'assistant').length === 0;
-
+  // 👉 Confirmación de mes ambigua
+  let parsedDate = parseNaturalDate(userMessage);
+  if (parsedDate && parsedDate.needsConfirmation) {
+    const mesActual = format(new Date(), 'MMMM');
     return res.json({
-      reply: `${isFirstAssistantMessage && !alreadyGreeted ? 'Hola 👋, ' : ''}${disponibilidad}`
-    });
-  }
-
-  // 📆 Fin de semana
-  if (lower.includes('fin de semana')) {
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    const daysUntilFriday = (5 - dayOfWeek + 7) % 7;
-    const friday = addDays(today, daysUntilFriday);
-    const sunday = addDays(friday, 2);
-    const disponibilidad = checkAvailabilityRange(format(friday, 'yyyy-MM-dd'), format(sunday, 'yyyy-MM-dd'));
-    const alreadyGreeted = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola 👋'));
-    const isFirstAssistantMessage = sessionMemory[userId].filter(m => m.role === 'assistant').length === 0;
-
-    return res.json({
-      reply: `${isFirstAssistantMessage && !alreadyGreeted ? 'Hola 👋, ' : ''}${disponibilidad}`
+      reply: `¿Te referís al ${parsedDate.day} de ${mesActual}? Por favor confirmame el mes.`
     });
   }
 
   // 📅 Fecha puntual
-  let parsedDate = parseNaturalDate(userMessage);
   if (!parsedDate) {
     const strictMatch = userMessage.match(/\d{4}-\d{2}-\d{2}/);
     parsedDate = strictMatch ? strictMatch[0] : null;
   }
 
   const contieneFechaNatural = /\d{1,2}\s*de\s*\w+/.test(userMessage);
-  const tieneIntencionGeneral = lower.includes('disponibilidad') || lower.includes('fecha') || lower.includes('reservar') || lower.includes('libre') || contieneFechaNatural || lower.includes('quiero ir') || lower.includes('quiero hospedarme') || lower.includes('quiero domo');
+  const tieneIntencionGeneral =
+    lower.includes('disponibilidad') ||
+    lower.includes('fecha') ||
+    lower.includes('reservar') ||
+    lower.includes('libre') ||
+    contieneFechaNatural ||
+    lower.includes('quiero ir') ||
+    lower.includes('quiero hospedarme') ||
+    lower.includes('quiero domo');
 
-  // 🧠 Si hay intención pero no hay fecha
+  if (
+    (lower.includes('sí') || lower.includes('claro') || lower.includes('dale')) &&
+    sessionMemory[userId]?.history?.ultimaFechaSugerida
+  ) {
+    const fecha = sessionMemory[userId].history.ultimaFechaSugerida;
+    delete sessionMemory[userId].history.ultimaFechaSugerida;
+
+    const disponibles = getDomosDisponibles(fecha);
+    const fechaBonita = formatToHuman(fecha);
+
+    if (disponibles.length === 0) {
+      return res.json({
+        reply: `Uff, parece que mientras tanto se reservaron todos los domos para el ${fechaBonita} 😢. ¿Querés que revise otra fecha?`
+      });
+    }
+
+    return res.json({
+      reply: `¡Perfecto! Para el ${fechaBonita} tenemos disponibles: ${disponibles.join(', ')}. ¿Cuál te gustaría reservar?`
+    });
+  }
+
   if (tieneIntencionGeneral && !parsedDate && !parseDateRange(userMessage)) {
-    const alreadyGreeted = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola 👋'));
-    const saludo = alreadyGreeted ? '' : 'Hola 👋, ';
+    const saludo = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola 👋')) ? '' : 'Hola 👋, ';
     return res.json({ reply: `${saludo}¿Qué fechas tenés en mente para verificar la disponibilidad?` });
   }
 
   if (parsedDate && tieneIntencionGeneral) {
     sessionMemory[userId].history.lastDate = parsedDate;
-    const disponibilidad = isDateAvailable(parsedDate);
-    const alreadyGreeted = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola 👋'));
-    const isFirstAssistantMessage = sessionMemory[userId].filter(m => m.role === 'assistant').length === 0;
 
-    if (!disponibilidad) {
+    if (!isDateAvailable(parsedDate)) {
       const respuesta = sugerirAlternativa(parsedDate, userId, sessionMemory);
       return res.json({
-        reply: `${isFirstAssistantMessage && !alreadyGreeted ? 'Hola 👋, ' : ''}${respuesta}`
+        reply: respuesta
       });
     }
 
     return res.json({
-      reply: `${isFirstAssistantMessage && !alreadyGreeted ? 'Hola 👋, ' : ''}¡Genial! El ${parsedDate} está disponible 😊. ¿Querés que lo reservemos?`
+      reply: `¡Genial! El ${parsedDate} está disponible 😊. ¿Querés que lo reservemos?`
     });
   }
 
-  // 🔁 Seguimiento si dicen “otra fecha”
-  if (lower.includes('otra fecha') || lower.includes('cerca de esa') || lower.includes('otra opción') || lower.includes('algo disponible') || lower.includes('fecha similar') || lower.includes('parecida')) {
+  const rangoFechas = parseDateRange(userMessage);
+  if (rangoFechas) {
+    sessionMemory[userId].history.lastDateRange = rangoFechas;
+    const disponibilidad = checkAvailabilityRange(rangoFechas.start, rangoFechas.end);
+    return res.json({ reply: disponibilidad });
+  }
+
+  if (
+    lower.includes('otra fecha') ||
+    lower.includes('cerca de esa') ||
+    lower.includes('otra opción') ||
+    lower.includes('algo disponible') ||
+    lower.includes('fecha similar') ||
+    lower.includes('parecida')
+  ) {
     const rememberedDate = sessionMemory[userId].history.lastDate;
     if (rememberedDate) {
       const disponibilidad = checkAvailability(rememberedDate);
-      return res.json({ reply: `Como me consultaste antes por el ${rememberedDate}, te cuento lo que encontré:\n\n${disponibilidad}` });
+      return res.json({
+        reply: `Como me consultaste antes por el ${rememberedDate}, te cuento lo que encontré:\n\n${disponibilidad}`
+      });
     }
   }
 
-  // ✅ Evaluar intención de “sí” después de almacenar la fecha sugerida
-  if ((lower.includes('sí') || lower.includes('claro') || lower.includes('dale')) && sessionMemory[userId]?.history?.ultimaFechaSugerida) {
-    const fecha = sessionMemory[userId].history.ultimaFechaSugerida;
-    delete sessionMemory[userId].history.ultimaFechaSugerida;
-    const disponibles = getDomosDisponibles(fecha);
-    const fechaBonita = formatToHuman(fecha);
-
-    if (disponibles.length === 0) {
-      return res.json({ reply: `Uff, parece que mientras tanto se reservaron todos los domos para el ${fechaBonita} 😢. ¿Querés que revise otra fecha?` });
-    }
-
-    return res.json({ reply: `¡Perfecto! Para el ${fechaBonita} tenemos disponibles: ${disponibles.join(', ')}. ¿Cuál te gustaría reservar?` });
-  }
-
-  // 💬 Chat normal con OpenAI
+  // 💬 Fallback Chat
   try {
-    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...sessionMemory[userId],
-      ],
-      temperature: 0.7,
-    }, {
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          ...sessionMemory[userId],
+        ],
+        temperature: 0.7,
       },
-    });
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
     let botReply = response.data.choices[0].message.content;
-    const alreadyGreeted = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola 👋'));
-    const isFirstAssistantMessage = sessionMemory[userId].filter(m => m.role === 'assistant').length === 0;
+    const greeted = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola 👋'));
+    const firstResponse = sessionMemory[userId].filter(m => m.role === 'assistant').length === 0;
 
-    if (isFirstAssistantMessage && !alreadyGreeted) {
+    if (firstResponse && !greeted) {
       botReply = `Hola 👋 Qué gusto tenerte por acá. ${botReply}`;
     }
 
     sessionMemory[userId].push({ role: 'assistant', content: botReply });
     res.json({ reply: botReply });
+
   } catch (error) {
     console.error('Error al consultar OpenAI:', error.message);
     console.error('Detalle completo:', error.response?.data || error);
