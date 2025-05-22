@@ -1,10 +1,17 @@
-const { parse, format, addDays, getDay } = require('date-fns');
-const { checkAvailability, isDateAvailable } = require('./checkAvailability');
+const { parse, format, addDays, getDay, subDays, isValid } = require('date-fns');
 const { es } = require('date-fns/locale');
+const { isDateAvailable, getDomosDisponibles } = require('./checkAvailability');
+
+// Configuración modificable
+const CONFIG = {
+  DIAS_BUSQUEDA_FINDE: 60,
+  DIAS_BUSQUEDA_SEMANA: 5,
+  DIAS_ALTERNATIVAS_A_MOSTRAR: 3 // Mostrar varias opciones
+};
 
 function formatToHuman(dateStr) {
   const date = parse(dateStr, 'yyyy-MM-dd', new Date());
-  return format(date, "d 'de' MMMM", { locale: es });
+  return isValid(date) ? format(date, "d 'de' MMMM", { locale: es }) : dateStr;
 }
 
 function esFinDeSemana(date) {
@@ -12,34 +19,64 @@ function esFinDeSemana(date) {
   return day === 5 || day === 6 || day === 0; // viernes, sábado, domingo
 }
 
-function sugerirAlternativa(dateStr, userId, sessionMemory) {
-  const date = parse(dateStr, 'yyyy-MM-dd', new Date());
+async function sugerirAlternativa(dateStr, userId, sessionMemory) {
+  try {
+    const date = parse(dateStr, 'yyyy-MM-dd', new Date());
+    if (!isValid(date)) {
+      throw new Error('Fecha inválida');
+    }
 
-  if (esFinDeSemana(date)) {
-    const diasABuscar = 60;
-    for (let i = 1; i <= diasABuscar; i++) {
-      const test = addDays(date, i);
-      const f = format(test, 'yyyy-MM-dd');
-      if (esFinDeSemana(test) && isDateAvailable(f)) {
-        sessionMemory[userId].history.ultimaFechaSugerida = f;
-        return `Ese finde está lleno 😢. Pero el próximo finde con disponibilidad es el ${formatToHuman(f)}.`;
+    const esFinde = esFinDeSemana(date);
+    const diasABuscar = esFinde ? CONFIG.DIAS_BUSQUEDA_FINDE : CONFIG.DIAS_BUSQUEDA_SEMANA;
+    const alternativas = [];
+
+    // Buscar hacia adelante y atrás
+    for (let i = 1; i <= diasABuscar && alternativas.length < CONFIG.DIAS_ALTERNATIVAS_A_MOSTRAR; i++) {
+      const testForward = addDays(date, i);
+      const testBackward = subDays(date, i);
+
+      for (const testDate of [testForward, testBackward]) {
+        if ((esFinde && !esFinDeSemana(testDate)) continue;
+        
+        const fechaStr = format(testDate, 'yyyy-MM-dd');
+        if (isDateAvailable(fechaStr)) {
+          const domos = getDomosDisponibles(fechaStr);
+          alternativas.push({
+            fecha: fechaStr,
+            label: formatToHuman(fechaStr),
+            domos
+          });
+        }
       }
     }
-    return `Ese finde está lleno 😢 y no encontré otro con espacio pronto. ¿Querés que revisemos otro mes?`;
-  }
 
-  // Entre semana
-  for (let i = 1; i <= 5; i++) {
-    const test = addDays(date, i);
-    const f = format(test, 'yyyy-MM-dd');
-    const dow = getDay(test);
-    if (dow >= 1 && dow <= 4 && checkAvailability(f)) {
-      sessionMemory[userId].history.ultimaFechaSugerida = f;
-      return `Ese día está reservado 😕. Pero el ${formatToHuman(f)} está disponible.`;
+    if (alternativas.length === 0) {
+      return esFinde 
+        ? `Ese finde está lleno 😢 y no encontré otros con espacio. ¿Querés que revisemos otro mes?`
+        : `No hay disponibilidad cercana. ¿Buscás otra fecha?`;
     }
-  }
 
-  return `No encontré días cercanos disponibles. ¿Querés que revise otro rango?`;
+    // Guardar todas las alternativas en sesión, no solo la primera
+    sessionMemory[userId].history.ultimasFechasSugeridas = alternativas;
+
+    const mensajeBase = esFinde
+      ? `Ese finde está lleno. Te sugiero:\n`
+      : `Ese día no está disponible. Podrías considerar:\n`;
+
+    const opciones = alternativas.map((alt, idx) => 
+      `${idx + 1}. ${alt.label} (${alt.domos.join(', ')})`
+    ).join('\n');
+
+    return `${mensajeBase}${opciones}\n\n¿Te interesa alguna? Responde con el número.`;
+    
+  } catch (error) {
+    console.error('Error en sugerirAlternativa:', error);
+    return 'Hubo un problema al buscar alternativas. ¿Podrías confirmar la fecha?';
+  }
 }
 
-module.exports = { sugerirAlternativa, formatToHuman };
+module.exports = {
+  sugerirAlternativa,
+  formatToHuman,
+  CONFIG // Exportar configuración para tests
+};
