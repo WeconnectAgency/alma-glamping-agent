@@ -1,7 +1,3 @@
-const parseNaturalDate = require('./parseNaturalDate');
-const parseDateRange = require('./parseDateRange');
-const { checkAvailability, checkAvailabilityRange } = require('./checkAvailability');
-
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
@@ -9,10 +5,13 @@ const cors = require("cors");
 const { format, addDays } = require('date-fns');
 require('dotenv').config();
 
+const parseNaturalDate = require('./parseNaturalDate');
+const parseDateRange = require('./parseDateRange');
+const { checkAvailability, checkAvailabilityRange } = require('./checkAvailability');
+
 const app = express();
 app.use(cors());
 const port = process.env.PORT || 3000;
-
 app.use(bodyParser.json());
 
 const SYSTEM_PROMPT = `
@@ -78,49 +77,50 @@ app.post('/mensaje', async (req, res) => {
 
   if (!sessionMemory[userId]) {
     sessionMemory[userId] = [];
-  }
-  if (!sessionMemory[userId].history) {
     sessionMemory[userId].history = {};
   }
 
   sessionMemory[userId].push({ role: 'user', content: userMessage });
-
   const lower = userMessage.toLowerCase();
 
-  // 🔎 Detectar rangos tipo “del 10 al 12 de julio”
+  // 🔎 Rango de fechas como “del 10 al 12 de julio”
   const rangoFechas = parseDateRange(userMessage);
   if (rangoFechas) {
+    sessionMemory[userId].history.lastDateRange = rangoFechas;
     const disponibilidad = checkAvailabilityRange(rangoFechas.start, rangoFechas.end);
     return res.json({ reply: disponibilidad });
   }
 
-  // 📆 Soporte para “fin de semana”
+  // 📆 Fin de semana (viernes a domingo)
   if (lower.includes('fin de semana')) {
     const today = new Date();
     const dayOfWeek = today.getDay();
     const daysUntilFriday = (5 - dayOfWeek + 7) % 7;
     const friday = addDays(today, daysUntilFriday);
     const sunday = addDays(friday, 2);
-    const startDate = format(friday, 'yyyy-MM-dd');
-    const endDate = format(sunday, 'yyyy-MM-dd');
-    const disponibilidad = checkAvailabilityRange(startDate, endDate);
+    const disponibilidad = checkAvailabilityRange(
+      format(friday, 'yyyy-MM-dd'),
+      format(sunday, 'yyyy-MM-dd')
+    );
     return res.json({ reply: disponibilidad });
   }
 
-  // 📅 Fechas naturales o exactas
+  // 📅 Fecha puntual
   let parsedDate = parseNaturalDate(userMessage);
   if (!parsedDate) {
     const strictMatch = userMessage.match(/\d{4}-\d{2}-\d{2}/);
     parsedDate = strictMatch ? strictMatch[0] : null;
   }
 
-  const contieneFechaNatural = /\d{1,2}\s*de\s*\w+/i.test(userMessage);
+  const contieneFechaNatural = /\d{1,2}\s*de\s*\w+/.test(userMessage);
   const tieneIntencion =
     lower.includes('disponibilidad') ||
     lower.includes('fecha') ||
     lower.includes('reservar') ||
     lower.includes('libre') ||
-    contieneFechaNatural;
+    contieneFechaNatural ||
+    lower.includes('quiero ir') ||
+    lower.includes('quiero reservar');
 
   if (parsedDate && tieneIntencion) {
     sessionMemory[userId].history.lastDate = parsedDate;
@@ -128,7 +128,7 @@ app.post('/mensaje', async (req, res) => {
     return res.json({ reply: disponibilidad });
   }
 
-  // 🧠 Seguimiento con fecha anterior recordada
+  // 🔁 Si dicen “otra fecha”, usamos la última mencionada
   if (
     lower.includes('otra fecha') ||
     lower.includes('cerca de esa') ||
@@ -146,7 +146,7 @@ app.post('/mensaje', async (req, res) => {
     }
   }
 
-  // 🧠 Respuesta normal con OpenAI
+  // 🤖 Consulta general (sin intención de fecha)
   try {
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
@@ -168,6 +168,7 @@ app.post('/mensaje', async (req, res) => {
 
     let botReply = response.data.choices[0].message.content;
 
+    // 👋 Saludo único en la primera interacción
     const alreadyGreeted = sessionMemory[userId].some(
       m => m.role === 'assistant' && m.content.includes('Hola 👋')
     );
