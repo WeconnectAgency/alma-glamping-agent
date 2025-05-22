@@ -100,6 +100,26 @@ app.post('/mensaje', async (req, res) => {
 
   sessionMemory[userId].push({ role: 'user', content: userMessage });
   const lower = userMessage.toLowerCase();
+  if (
+  (lower.includes('sí') || lower.includes('claro') || lower.includes('dale')) &&
+  sessionMemory[userId]?.history?.ultimaFechaSugerida
+) {
+  const fecha = sessionMemory[userId].history.ultimaFechaSugerida;
+  delete sessionMemory[userId].history.ultimaFechaSugerida;
+
+  const disponibles = getDomosDisponibles(fecha);
+  const fechaBonita = formatToHuman(fecha);
+
+  if (disponibles.length === 0) {
+    return res.json({
+      reply: `Uff, parece que mientras tanto se reservaron todos los domos para el ${fechaBonita} 😢. ¿Querés que revise otra fecha?`
+    });
+  }
+
+  return res.json({
+    reply: `¡Perfecto! Para el ${fechaBonita} tenemos disponibles: ${disponibles.join(', ')}. ¿Cuál te gustaría reservar?`
+  });
+}
 
   // 🔎 Rango de fechas como “del 10 al 12 de julio”
   const rangoFechas = parseDateRange(userMessage);
@@ -210,27 +230,6 @@ app.post('/mensaje', async (req, res) => {
       });
     }
   }
-
-if (
-  (lower.includes('sí') || lower.includes('claro') || lower.includes('dale')) &&
-  sessionMemory[userId]?.history?.ultimaFechaSugerida
-) {
-  const fecha = sessionMemory[userId].history.ultimaFechaSugerida;
-  delete sessionMemory[userId].history.ultimaFechaSugerida;
-
-  const disponibles = getDomosDisponibles(fecha);
-  const fechaBonita = formatToHuman(fecha);
-
-  if (disponibles.length === 0) {
-    return res.json({
-      reply: `Uff, parece que mientras tanto se reservaron todos los domos para el ${fechaBonita} 😢. ¿Querés que revise otra fecha?`
-    });
-  }
-
-  return res.json({
-    reply: `¡Perfecto! Para el ${fechaBonita} tenemos disponibles: ${disponibles.join(', ')}. ¿Cuál te gustaría reservar?`
-  });
-}
 
   // 💬 Chat normal con OpenAI
   try {
