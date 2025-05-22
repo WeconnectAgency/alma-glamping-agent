@@ -209,6 +209,29 @@ app.post('/mensaje', async (req, res) => {
       });
     }
   }
+const { getDomosDisponibles } = require('./checkAvailability');
+const { formatToHuman } = require('./sugerirAlternativa');
+
+if (
+  (lower.includes('sí') || lower.includes('claro') || lower.includes('dale')) &&
+  sessionMemory[userId]?.history?.ultimaFechaSugerida
+) {
+  const fecha = sessionMemory[userId].history.ultimaFechaSugerida;
+  delete sessionMemory[userId].history.ultimaFechaSugerida;
+
+  const disponibles = getDomosDisponibles(fecha);
+  const fechaBonita = formatToHuman(fecha);
+
+  if (disponibles.length === 0) {
+    return res.json({
+      reply: `Uff, parece que mientras tanto se reservaron todos los domos para el ${fechaBonita} 😢. ¿Querés que revise otra fecha?`
+    });
+  }
+
+  return res.json({
+    reply: `¡Perfecto! Para el ${fechaBonita} tenemos disponibles: ${disponibles.join(', ')}. ¿Cuál te gustaría reservar?`
+  });
+}
 
   // 💬 Chat normal con OpenAI
   try {
