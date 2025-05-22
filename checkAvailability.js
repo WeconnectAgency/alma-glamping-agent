@@ -41,9 +41,14 @@ function isDateAvailable(dateStr) {
     return false;
   }
 
-  const disponibles = Object.keys(row).filter(
-    col => col !== 'Fecha' && (!row[col] || row[col].toString().trim() === '')
-  );
+ const disponibles = Object.keys(row).filter(col => {
+  if (col === 'Fecha') return false;
+  const valor = row[col];
+  if (typeof valor === 'undefined' || valor === null) return true;
+  const limpio = valor.toString().replace(/\s/g, '');
+  return limpio === '';
+});
+
 
   console.log(`🔢 Domo(s) disponibles para ${targetDate}: ${disponibles.length > 0 ? disponibles.join(', ') : 'NINGUNO'}`);
 
