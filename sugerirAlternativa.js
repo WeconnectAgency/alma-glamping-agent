@@ -1,6 +1,6 @@
 const { parse, format, addDays, getDay } = require('date-fns');
 const { checkAvailability } = require('./checkAvailability');
-
+const { isDateAvailable } = require('./checkAvailability');
 function formatToHuman(dateStr) {
   const date = parse(dateStr, 'yyyy-MM-dd', new Date());
   return format(date, "d 'de' MMMM");
@@ -21,7 +21,7 @@ function sugerirAlternativa(dateStr) {
       const test = addDays(date, i);
       const d = getDay(test);
       const f = format(test, 'yyyy-MM-dd');
-      if (esFinDeSemana(test) && checkAvailability(f)) {
+      if (esFinDeSemana(test) && isDateAvailable(f)) {
         return `Ese finde está lleno 😢. Pero el próximo finde con disponibilidad es el ${formatToHuman(f)}. ¿Querés que lo reservemos?`;
       }
     }
