@@ -8,7 +8,8 @@ const { sugerirAlternativa } = require('./sugerirAlternativa');
 const parseNaturalDate = require('./parseNaturalDate');
 const parseDateRange = require('./parseDateRange');
 const { checkAvailability, checkAvailabilityRange } = require('./checkAvailability');
-
+const { getDomosDisponibles } = require('./checkAvailability');
+const { formatToHuman } = require('./sugerirAlternativa');
 const app = express();
 app.use(cors());
 const port = process.env.PORT || 3000;
@@ -181,8 +182,7 @@ app.post('/mensaje', async (req, res) => {
   // 👉 Lógica si NO hay disponibilidad
   if (!disponibilidad) {
     const { sugerirAlternativa } = require('./sugerirAlternativa');
-    const respuesta = sugerirAlternativa(parsedDate);
-    sessionMemory[userId].history.ultimaFechaSugerida = parsedDate;
+  const respuesta = sugerirAlternativa(parsedDate, userId, sessionMemory);
     return res.json({
       reply: `${isFirstAssistantMessage && !alreadyGreeted ? 'Hola 👋, ' : ''}${respuesta}`
     });
@@ -210,8 +210,6 @@ app.post('/mensaje', async (req, res) => {
       });
     }
   }
-const { getDomosDisponibles } = require('./checkAvailability');
-const { formatToHuman } = require('./sugerirAlternativa');
 
 if (
   (lower.includes('sí') || lower.includes('claro') || lower.includes('dale')) &&
