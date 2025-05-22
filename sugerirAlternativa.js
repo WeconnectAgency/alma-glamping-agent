@@ -1,10 +1,14 @@
 const { parse, format, addDays, getDay } = require('date-fns');
 const { checkAvailability } = require('./checkAvailability');
 const { isDateAvailable } = require('./checkAvailability');
+const { parse, format } = require('date-fns');
+const { es } = require('date-fns/locale');
+
 function formatToHuman(dateStr) {
   const date = parse(dateStr, 'yyyy-MM-dd', new Date());
-  return format(date, "d 'de' MMMM");
+  return format(date, "d 'de' MMMM", { locale: es });
 }
+
 
 function esFinDeSemana(date) {
   const day = getDay(date);
