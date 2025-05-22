@@ -4,7 +4,7 @@ const axios = require('axios');
 const cors = require("cors");
 const { format, addDays } = require('date-fns');
 require('dotenv').config();
-
+const { sugerirAlternativa } = require('./sugerirAlternativa');
 const parseNaturalDate = require('./parseNaturalDate');
 const parseDateRange = require('./parseDateRange');
 const { checkAvailability, checkAvailabilityRange } = require('./checkAvailability');
@@ -168,20 +168,29 @@ app.post('/mensaje', async (req, res) => {
   }
 
   if (parsedDate && tieneIntencionGeneral) {
-    sessionMemory[userId].history.lastDate = parsedDate;
-    const disponibilidad = checkAvailability(parsedDate);
-    const alreadyGreeted = sessionMemory[userId].some(
-      m => m.role === 'assistant' && m.content.includes('Hola 👋')
-    );
-    const isFirstAssistantMessage = sessionMemory[userId].filter(
-      m => m.role === 'assistant'
-    ).length === 0;
+  sessionMemory[userId].history.lastDate = parsedDate;
+  const disponibilidad = checkAvailability(parsedDate);
+  const alreadyGreeted = sessionMemory[userId].some(
+    m => m.role === 'assistant' && m.content.includes('Hola 👋')
+  );
+  const isFirstAssistantMessage = sessionMemory[userId].filter(
+    m => m.role === 'assistant'
+  ).length === 0;
 
+  // 👉 Lógica si NO hay disponibilidad
+  if (!disponibilidad) {
+    const { sugerirAlternativa } = require('./sugerirAlternativa');
+    const respuesta = sugerirAlternativa(parsedDate);
     return res.json({
-      reply: `${isFirstAssistantMessage && !alreadyGreeted ? 'Hola 👋, ' : ''}${disponibilidad}`
+      reply: `${isFirstAssistantMessage && !alreadyGreeted ? 'Hola 👋, ' : ''}${respuesta}`
     });
   }
 
+  // 👉 Lógica normal si hay disponibilidad
+  return res.json({
+    reply: `${isFirstAssistantMessage && !alreadyGreeted ? 'Hola 👋, ' : ''}¡Genial! El ${parsedDate} está disponible 😊. ¿Querés que lo reservemos?`
+  });
+}
   // 🔁 Seguimiento si dicen “otra fecha”
   if (
     lower.includes('otra fecha') ||
