@@ -9,31 +9,47 @@ function formatearFechaNatural(dateString) {
   return format(parsedDate, "d 'de' MMMM", { locale: es });
 }
 function isDateAvailable(dateStr) {
+  console.log(`🔎 Verificando disponibilidad para: ${dateStr}`);
+
   const workbook = XLSX.readFile(FILE_PATH);
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const data = XLSX.utils.sheet_to_json(sheet);
 
   const targetDate = format(parse(dateStr, 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
+  console.log(`📅 Fecha formateada: ${targetDate}`);
 
   const row = data.find(r => {
     if (!r['Fecha']) return false;
+
     let rowDate;
     if (typeof r['Fecha'] === 'string') {
       rowDate = format(parse(r['Fecha'], 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
     } else {
       rowDate = format(new Date((r['Fecha'] - 25569) * 86400 * 1000), 'yyyy-MM-dd');
     }
-    return rowDate === targetDate;
+
+    const match = rowDate === targetDate;
+    if (match) {
+      console.log(`✅ Encontrada fila para: ${rowDate}`);
+    }
+
+    return match;
   });
 
-  if (!row) return false;
+  if (!row) {
+    console.log('❌ No se encontró fila en el Excel para esa fecha.');
+    return false;
+  }
 
   const disponibles = Object.keys(row).filter(
     col => col !== 'Fecha' && (!row[col] || row[col].toString().trim() === '')
   );
 
+  console.log(`🔢 Domo(s) disponibles para ${targetDate}: ${disponibles.length > 0 ? disponibles.join(', ') : 'NINGUNO'}`);
+
   return disponibles.length > 0;
 }
+
 
 function checkAvailability(dateString) {
   try {
