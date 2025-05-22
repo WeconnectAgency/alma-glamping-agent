@@ -65,7 +65,7 @@ REGLAS DE COMPORTAMIENTO:
 - No uses markdown como [enlace](url). Mostrá el link directamente.
 - Si ya diste una respuesta similar en la sesión, retomá lo anterior sin repetirlo.
 - Si no sabés algo, decilo con honestidad y redirigí: “No tengo esa info exacta, pero podés consultarla por WhatsApp 👉 https://wa.link/r8p2rp”
-- Solo saludá con “Hola 👋 Qué gusto tenerte por acá.” en la primera respuesta. No lo repitas si ya fue dicho antes en esta sesión.
+- Solo saludá con “Hola 👋 ” en la primera respuesta. No lo repitas si ya fue dicho antes en esta sesión.
 ⚠️ Nunca fuerces la reserva. Leés la intención y acompañás con naturalidad.
 `;
 
@@ -88,7 +88,19 @@ app.post('/mensaje', async (req, res) => {
   if (rangoFechas) {
     sessionMemory[userId].history.lastDateRange = rangoFechas;
     const disponibilidad = checkAvailabilityRange(rangoFechas.start, rangoFechas.end);
-    return res.json({ reply: disponibilidad });
+    const alreadyGreeted = sessionMemory[userId].some(
+  m => m.role === 'assistant' && m.content.includes('Hola 👋')
+);
+const isFirstAssistantMessage = sessionMemory[userId].filter(
+  m => m.role === 'assistant'
+).length === 0;
+
+if (isFirstAssistantMessage && !alreadyGreeted) {
+  return res.json({ reply: `Hola 👋  ${disponibilidad}` });
+} else {
+  return res.json({ reply: disponibilidad });
+}
+
   }
 
   // 📆 Fin de semana (viernes a domingo)
@@ -102,7 +114,19 @@ app.post('/mensaje', async (req, res) => {
       format(friday, 'yyyy-MM-dd'),
       format(sunday, 'yyyy-MM-dd')
     );
-    return res.json({ reply: disponibilidad });
+    const alreadyGreeted = sessionMemory[userId].some(
+  m => m.role === 'assistant' && m.content.includes('Hola 👋')
+);
+const isFirstAssistantMessage = sessionMemory[userId].filter(
+  m => m.role === 'assistant'
+).length === 0;
+
+if (isFirstAssistantMessage && !alreadyGreeted) {
+  return res.json({ reply: `Hola 👋, ${disponibilidad}` });
+} else {
+  return res.json({ reply: disponibilidad });
+}
+
   }
 
   // 📅 Fecha puntual
@@ -125,7 +149,19 @@ app.post('/mensaje', async (req, res) => {
   if (parsedDate && tieneIntencion) {
     sessionMemory[userId].history.lastDate = parsedDate;
     const disponibilidad = checkAvailability(parsedDate);
-    return res.json({ reply: disponibilidad });
+    const alreadyGreeted = sessionMemory[userId].some(
+  m => m.role === 'assistant' && m.content.includes('Hola 👋')
+);
+const isFirstAssistantMessage = sessionMemory[userId].filter(
+  m => m.role === 'assistant'
+).length === 0;
+
+if (isFirstAssistantMessage && !alreadyGreeted) {
+  return res.json({ reply: `Hola 👋, ${disponibilidad}` });
+} else {
+  return res.json({ reply: disponibilidad });
+}
+
   }
 
   // 🔁 Si dicen “otra fecha”, usamos la última mencionada
