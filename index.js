@@ -4,7 +4,6 @@ const axios = require('axios');
 const cors = require("cors");
 const { format, addDays } = require('date-fns');
 require('dotenv').config();
-
 const { sugerirAlternativa, formatToHuman } = require('./sugerirAlternativa');
 const parseNaturalDate = require('./parseNaturalDate');
 const parseDateRange = require('./parseDateRange');
@@ -85,21 +84,23 @@ Si alguien propone una idea nueva, respondé: “Contame lo que tenés en mente 
 - Práctico → tono directo, sin adornos.
 `;
 const sessionMemory = {};
+
 app.post('/mensaje', async (req, res) => {
   const userMessage = req.body.message || '';
   const userId = req.body.userId || 'cliente';
-  const lower = userMessage.toLowerCase();
 
   if (!sessionMemory[userId]) {
     sessionMemory[userId] = [];
     sessionMemory[userId].history = {};
   }
-  sessionMemory[userId].push({ role: 'user', content: userMessage });
 
-  // ✅ PRIORIDAD: seguimiento a sugerencia anterior
+  sessionMemory[userId].push({ role: 'user', content: userMessage });
+  const lower = userMessage.toLowerCase();
+
+  // ✅ PRIORIDAD: Respuesta afirmativa a sugerencia previa
   if (
     (lower.includes('sí') || lower.includes('claro') || lower.includes('dale')) &&
-    sessionMemory[userId].history.ultimaFechaSugerida
+    sessionMemory[userId]?.history?.ultimaFechaSugerida
   ) {
     const fecha = sessionMemory[userId].history.ultimaFechaSugerida;
     delete sessionMemory[userId].history.ultimaFechaSugerida;
@@ -118,24 +119,39 @@ app.post('/mensaje', async (req, res) => {
     });
   }
 
-  // 🔎 Rango de fechas "del 10 al 12 de julio"
+  // 🔎 Rango de fechas como “del 10 al 12 de julio”
   const rangoFechas = parseDateRange(userMessage);
   if (rangoFechas) {
     sessionMemory[userId].history.lastDateRange = rangoFechas;
     const disponibilidad = checkAvailabilityRange(rangoFechas.start, rangoFechas.end);
-    return res.json({ reply: disponibilidad });
+    const alreadyGreeted = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola 👋'));
+    const isFirstAssistantMessage = sessionMemory[userId].filter(m => m.role === 'assistant').length === 0;
+
+    return res.json({
+      reply: `${isFirstAssistantMessage && !alreadyGreeted ? 'Hola 👋, ' : ''}${disponibilidad}`
+    });
   }
 
   // 📆 Fin de semana
   if (lower.includes('fin de semana')) {
     const today = new Date();
-    const friday = addDays(today, (5 - today.getDay() + 7) % 7);
+    const dayOfWeek = today.getDay();
+    const daysUntilFriday = (5 - dayOfWeek + 7) % 7;
+    const friday = addDays(today, daysUntilFriday);
     const sunday = addDays(friday, 2);
-    const disponibilidad = checkAvailabilityRange(format(friday, 'yyyy-MM-dd'), format(sunday, 'yyyy-MM-dd'));
-    return res.json({ reply: disponibilidad });
+    const disponibilidad = checkAvailabilityRange(
+      format(friday, 'yyyy-MM-dd'),
+      format(sunday, 'yyyy-MM-dd')
+    );
+    const alreadyGreeted = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola 👋'));
+    const isFirstAssistantMessage = sessionMemory[userId].filter(m => m.role === 'assistant').length === 0;
+
+    return res.json({
+      reply: `${isFirstAssistantMessage && !alreadyGreeted ? 'Hola 👋, ' : ''}${disponibilidad}`
+    });
   }
 
-  // 📅 Fecha puntual o natural
+  // 📅 Fecha puntual
   let parsedDate = parseNaturalDate(userMessage);
   if (!parsedDate) {
     const strictMatch = userMessage.match(/\d{4}-\d{2}-\d{2}/);
@@ -153,25 +169,30 @@ app.post('/mensaje', async (req, res) => {
     lower.includes('quiero hospedarme') ||
     lower.includes('quiero domo');
 
-  if (tieneIntencionGeneral && !parsedDate && !rangoFechas) {
-    return res.json({ reply: `¿Qué fechas tenés en mente para verificar la disponibilidad?` });
+  if (tieneIntencionGeneral && !parsedDate && !parseDateRange(userMessage)) {
+    const alreadyGreeted = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola 👋'));
+    const saludo = alreadyGreeted ? '' : 'Hola 👋, ';
+    return res.json({ reply: `${saludo}¿Qué fechas tenés en mente para verificar la disponibilidad?` });
   }
 
   if (parsedDate && tieneIntencionGeneral) {
     sessionMemory[userId].history.lastDate = parsedDate;
     const disponibilidad = isDateAvailable(parsedDate);
+    const alreadyGreeted = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola 👋'));
+    const isFirstAssistantMessage = sessionMemory[userId].filter(m => m.role === 'assistant').length === 0;
 
     if (!disponibilidad) {
       const respuesta = sugerirAlternativa(parsedDate, userId, sessionMemory);
-      return res.json({ reply: respuesta });
+      return res.json({
+        reply: `${isFirstAssistantMessage && !alreadyGreeted ? 'Hola 👋, ' : ''}${respuesta}`
+      });
     }
 
     return res.json({
-      reply: `¡Genial! El ${parsedDate} está disponible 😊. ¿Querés que lo reservemos?`
+      reply: `${isFirstAssistantMessage && !alreadyGreeted ? 'Hola 👋, ' : ''}¡Genial! El ${parsedDate} está disponible 😊. ¿Querés que lo reservemos?`
     });
   }
 
-  // 🔁 Seguimiento genérico "otra fecha"
   if (
     lower.includes('otra fecha') ||
     lower.includes('cerca de esa') ||
@@ -183,11 +204,12 @@ app.post('/mensaje', async (req, res) => {
     const rememberedDate = sessionMemory[userId].history.lastDate;
     if (rememberedDate) {
       const disponibilidad = checkAvailability(rememberedDate);
-      return res.json({ reply: `Como me consultaste antes por el ${rememberedDate}, te cuento lo que encontré:\n\n${disponibilidad}` });
+      return res.json({
+        reply: `Como me consultaste antes por el ${rememberedDate}, te cuento lo que encontré:\n\n${disponibilidad}`,
+      });
     }
   }
 
-  // 💬 Fallback OpenAI
   try {
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
@@ -208,12 +230,8 @@ app.post('/mensaje', async (req, res) => {
     );
 
     let botReply = response.data.choices[0].message.content;
-    const alreadyGreeted = sessionMemory[userId].some(
-      m => m.role === 'assistant' && m.content.includes('Hola 👋')
-    );
-    const isFirstAssistantMessage = sessionMemory[userId].filter(
-      m => m.role === 'assistant'
-    ).length === 0;
+    const alreadyGreeted = sessionMemory[userId].some(m => m.role === 'assistant' && m.content.includes('Hola 👋'));
+    const isFirstAssistantMessage = sessionMemory[userId].filter(m => m.role === 'assistant').length === 0;
 
     if (isFirstAssistantMessage && !alreadyGreeted) {
       botReply = `Hola 👋 Qué gusto tenerte por acá. ${botReply}`;
@@ -232,4 +250,3 @@ app.post('/mensaje', async (req, res) => {
 app.listen(port, () => {
   console.log(`Servidor activo en http://localhost:${port}`);
 });
-
