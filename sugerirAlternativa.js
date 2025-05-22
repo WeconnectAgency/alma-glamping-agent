@@ -14,43 +14,32 @@ function esFinDeSemana(date) {
 
 function sugerirAlternativa(dateStr, userId, sessionMemory) {
   const date = parse(dateStr, 'yyyy-MM-dd', new Date());
-  const dayOfWeek = getDay(date);
 
-  // Si es fin de semana (viernes, sábado, domingo)
   if (esFinDeSemana(date)) {
     const diasABuscar = 60;
-    let encontrada = null;
-
     for (let i = 1; i <= diasABuscar; i++) {
       const test = addDays(date, i);
       const f = format(test, 'yyyy-MM-dd');
-
       if (esFinDeSemana(test) && isDateAvailable(f)) {
-        encontrada = f;
-        break;
+        sessionMemory[userId].history.ultimaFechaSugerida = f;
+        return `Ese finde está lleno 😢. Pero el próximo finde con disponibilidad es el ${formatToHuman(f)}.`;
       }
     }
-
-    if (encontrada) {
-      sessionMemory[userId].history.ultimaFechaSugerida = encontrada;
-      return `Ese finde está lleno 😢. Pero el próximo finde con disponibilidad es el ${formatToHuman(encontrada)}. ¿Querés que lo reservemos?`;
-    }
-
     return `Ese finde está lleno 😢 y no encontré otro con espacio pronto. ¿Querés que revisemos otro mes?`;
   }
 
-  // Si es entre semana (lunes a jueves)
+  // Entre semana
   for (let i = 1; i <= 5; i++) {
     const test = addDays(date, i);
-    const dow = getDay(test);
     const f = format(test, 'yyyy-MM-dd');
-
+    const dow = getDay(test);
     if (dow >= 1 && dow <= 4 && checkAvailability(f)) {
-      return `Ese día está reservado 😕. Pero el ${formatToHuman(f)} está disponible. ¿Te gustaría reservarlo?`;
+      sessionMemory[userId].history.ultimaFechaSugerida = f;
+      return `Ese día está reservado 😕. Pero el ${formatToHuman(f)} está disponible.`;
     }
   }
 
   return `No encontré días cercanos disponibles. ¿Querés que revise otro rango?`;
 }
 
-module.exports = { sugerirAlternativa };
+module.exports = { sugerirAlternativa, formatToHuman };
