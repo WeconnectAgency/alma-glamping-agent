@@ -19,12 +19,13 @@ function checkAvailability(dateString) {
     const fechaBonita = formatearFechaNatural(targetDate);
 
     const row = data.find(r => {
-      const rowDate = format(
-  typeof r['Fecha'] === 'string'
-    ? parse(r['Fecha'], 'yyyy-MM-dd', new Date())
-    : new Date((r['Fecha'] - 25569) * 86400 * 1000),
-  'yyyy-MM-dd'
-);
+      if (!r['Fecha']) return false;
+      let rowDate;
+if (typeof r['Fecha'] === 'string') {
+  rowDate = format(parse(r['Fecha'], 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
+} else {
+  rowDate = format(new Date((r['Fecha'] - 25569) * 86400 * 1000), 'yyyy-MM-dd');
+}
       return rowDate === targetDate;
     });
 
@@ -45,7 +46,16 @@ function checkAvailability(dateString) {
 
       for (let i = 1; i <= 7 && alternativas.length < maxSugerencias; i++) {
         const nuevaFecha = format(addDays(fechaInicial, i), 'yyyy-MM-dd');
-        const otraRow = data.find(r => format(new Date(r['Fecha']), 'yyyy-MM-dd') === nuevaFecha);
+        const otraRow = data.find(r => {
+  if (!r['Fecha']) return false;
+  let rowDate;
+  if (typeof r['Fecha'] === 'string') {
+    rowDate = format(parse(r['Fecha'], 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
+  } else {
+    rowDate = format(new Date((r['Fecha'] - 25569) * 86400 * 1000), 'yyyy-MM-dd');
+  }
+  return rowDate === nuevaFecha;
+});
         if (otraRow) {
           const domosDisponibles = Object.keys(otraRow).filter(
             col => col !== 'Fecha' && (!otraRow[col] || otraRow[col].toString().trim() === '')
