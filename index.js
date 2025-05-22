@@ -182,6 +182,7 @@ app.post('/mensaje', async (req, res) => {
   if (!disponibilidad) {
     const { sugerirAlternativa } = require('./sugerirAlternativa');
     const respuesta = sugerirAlternativa(parsedDate);
+    sessionMemory[userId].history.ultimaFechaSugerida = parsedDate;
     return res.json({
       reply: `${isFirstAssistantMessage && !alreadyGreeted ? 'Hola 👋, ' : ''}${respuesta}`
     });
