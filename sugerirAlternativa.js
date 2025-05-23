@@ -76,21 +76,20 @@ async function getDomosDisponiblesWithCache(dateStr) {
 // 3. Versión Mejorada de sugerirAlternativa con Caché
 async function sugerirAlternativa(dateStr, userId, sessionMemory) {
   try {
-   const rawDate = typeof dateString === 'object' && dateString.date
-  ? dateString.date
-  : dateString;
+    const rawDate = typeof dateStr === 'object' && dateStr.date
+      ? dateStr.date
+      : dateStr;
 
-const date = parse(rawDate, 'yyyy-MM-dd', new Date());
-
+    const date = parse(rawDate, 'yyyy-MM-dd', new Date());
     if (!isValid(date)) throw new Error('Fecha inválida');
 
     const [disponible, alternativas] = await Promise.all([
-      isDateAvailableWithCache(dateStr),
+      isDateAvailableWithCache(rawDate),
       buscarAlternativas(date, sessionMemory)
     ]);
 
     if (disponible) {
-   return `¡Buenas noticias! El ${formatToHuman(rawDate)} sigue disponible. ¿Querés reservar?`;
+      return `¡Buenas noticias! El ${formatToHuman(rawDate)} sigue disponible. ¿Querés reservar?`;
     }
 
     if (alternativas.length === 0) {
@@ -100,25 +99,29 @@ const date = parse(rawDate, 'yyyy-MM-dd', new Date());
     }
 
     sessionMemory[userId].history.ultimasFechasSugeridas = alternativas;
-    
+
     const mensajeBase = esFinDeSemana(date)
       ? `Ese finde está completo. Te sugiero:\n`
       : `Esa fecha no está disponible. Podés elegir:\n`;
 
-    const opciones = alternativas.map((alt, i) => 
-      `${i+1}. ${alt.fecha} (${alt.domos.join(', ')})`
+    const opciones = alternativas.map((alt, i) =>
+      `${i + 1}. ${alt.fecha} (${alt.domos.join(', ')})`
     ).join('\n');
 
     return `${mensajeBase}${opciones}\n\nDecime el número de tu preferencia.`;
 
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error en sugerirAlternativa:', error);
     return 'Hubo un problema al buscar fechas. ¿Podrías intentarlo de nuevo?';
   }
 }
 
 // Función auxiliar para buscar alternativas
 async function buscarAlternativas(date, sessionMemory) {
+ if (!isValid(date)) {
+  console.warn('⚠️ Fecha inválida en buscarAlternativas:', date);
+  return [];
+}
   const esFinde = esFinDeSemana(date);
   const config = {
     diasBusqueda: esFinde ? 60 : 14,
