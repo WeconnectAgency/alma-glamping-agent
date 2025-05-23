@@ -251,22 +251,24 @@ const response = await axios.post(
 
 let botReply = response.data.choices[0].message.content;
 
-// ✅ Saludo solo una vez al inicio
-const userMessages = memory.conversation.filter(m => m.role === 'user');
-const assistantMessages = memory.conversation.filter(m => m.role === 'assistant');
+// ✅ SALUDO AUTOMÁTICO SOLO UNA VEZ AL INICIO
+const assistantReplies = memory.conversation.filter(m => m.role === 'assistant');
+const hasGreeted = assistantReplies.some(m => m.content.toLowerCase().includes('hola 👋'));
 
-const isFirstMessage = userMessages.length === 1 && assistantMessages.length === 0;
-const alreadyGreeted = assistantMessages.some(
-  m => m.content.toLowerCase().includes('hola 👋')
-);
+let botReply = response.data.choices[0].message.content;
 
-console.log('[🧠 DEBUG] Mensajes previos:', memory.conversation);
-console.log('[🧪 DEBUG] isFirstMessage:', isFirstMessage);
-console.log('[🧪 DEBUG] alreadyGreeted:', alreadyGreeted);
-
-if (isFirstMessage && !alreadyGreeted) {
+if (assistantReplies.length === 0 || !hasGreeted) {
   botReply = `Hola 👋 Pura Vida. ${botReply}`;
 }
+
+// Guardamos el mensaje generado
+memory.conversation.push({ role: 'assistant', content: botReply });
+
+// Debug final para monitorear la respuesta generada
+console.log('[📝 BOT REPLY FINAL]:', botReply);
+
+return res.json({ reply: botReply });
+
 
   } catch (error) {
     console.error('Error:', error);
