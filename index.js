@@ -171,14 +171,19 @@ app.post('/mensaje', async (req, res) => {
       return res.json({ reply: `¿Qué fechas tenés en mente para verificar la disponibilidad?` });
     }
 
-  if (parsedDate && tieneIntencion) {
+ if (parsedDate && tieneIntencion) {
   const fechaISO = typeof parsedDate === 'object' && parsedDate.date
     ? parsedDate.date
     : parsedDate;
 
+  if (typeof fechaISO !== 'string') {
+    console.error('[❌ ERROR] isDateAvailable recibió un tipo no válido:', fechaISO);
+    return res.json({ reply: 'Para no cometer errores, ¿me confirmás el día con el mes, por fa? 😊' });
+  }
+
   memory.history.lastDate = fechaISO;
 
-  const disponible = isDateAvailable(fechaISO);
+  const disponible = await isDateAvailable(fechaISO); // ✅ Este también necesitaba `await`
 
   if (!disponible) {
     const respuesta = await sugerirAlternativa(fechaISO, userId, sessionMemory);
@@ -191,35 +196,37 @@ app.post('/mensaje', async (req, res) => {
 }
 
 
-    // 🔁 Otra fecha
-    if (lower.includes('otra fecha') || lower.includes('cerca') || lower.includes('alternativa')) {
-      const rememberedDate = memory.history.lastDate;
-      if (rememberedDate) {
-        const respuesta = sugerirAlternativa(rememberedDate, userId, sessionMemory);
-        return res.json({ reply: respuesta });
-      } else {
-        return res.json({ reply: '¿Para qué fecha te gustaría que revise disponibilidad?' });
-      }
-    }
+
+   // 🔁 Otra fecha
+if (lower.includes('otra fecha') || lower.includes('cerca') || lower.includes('alternativa')) {
+  const rememberedDate = memory.history.lastDate;
+  if (rememberedDate) {
+    const respuesta = await sugerirAlternativa(rememberedDate, userId, sessionMemory); // ✅ await agregado
+    return res.json({ reply: String(respuesta) });
+  } else {
+    return res.json({ reply: '¿Para qué fecha te gustaría que revise disponibilidad?' });
+  }
+}
+
 
     // 💬 Fallback con GPT
     const response = await axios.post(
-      'https://api.openai.com/v1/chat/completions',
-      {
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          ...memory.conversation
-        ],
-        temperature: 0.7
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+  'https://api.openai.com/v1/chat/completions',
+  {
+    model: 'gpt-4o',
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...memory.conversation
+    ],
+    temperature: 0.7
+  },
+  {
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json'  // ✅ Esto está bien con comillas dobles o simples consistentes
+    }
+  }
+);
 
     const botReply = response.data.choices[0].message.content;
     memory.conversation.push({ role: 'assistant', content: botReply });
