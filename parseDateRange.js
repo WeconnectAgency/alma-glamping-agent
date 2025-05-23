@@ -40,7 +40,7 @@ function parseDateRange(text, referenceDate = new Date()) {
     oct: 9, octubre: 9, nov: 10, noviembre: 10, dic: 11, diciembre: 11
   };
 
-  const monthIndex = monthMap[mesNombre];
+  const monthIndex = monthMap[mesNombre.toLowerCase()];
   if (monthIndex === undefined) return null;
 
   // Manejo de año (si no se especifica, usar el actual o próximo si ya pasó)
@@ -49,11 +49,15 @@ function parseDateRange(text, referenceDate = new Date()) {
   let endDate = new Date(currentYear, monthIndex, parseInt(diaFin));
 
   // Validación de fechas inválidas (ej. 31 de abril)
-  if (!isValid(startDate) startDate = new Date(currentYear, monthIndex + 1, 0);
-  if (!isValid(endDate)) endDate = new Date(currentYear, monthIndex + 1, 0);
+  if (!isValid(startDate)) {
+    startDate = new Date(currentYear, monthIndex + 1, 0);
+  }
+  if (!isValid(endDate)) {
+    endDate = new Date(currentYear, monthIndex + 1, 0);
+  }
 
   // Ajuste automático de año si las fechas ya pasaron
-  if (isAfter(new Date(), endDate) {
+  if (isAfter(new Date(), endDate)) {
     startDate = addYears(startDate, 1);
     endDate = addYears(endDate, 1);
   }

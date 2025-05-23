@@ -119,7 +119,7 @@ app.post('/mensaje', async (req, res) => {
   // Flujo principal de conversación
   try {
     // 1. Confirmación de sugerencia previa
-    if ((lowerMessage.includes('sí') || lowerMessage.includes('claro') || lowerMessage.includes('dale')) {
+    if (lowerMessage.includes('sí') || lowerMessage.includes('claro') || lowerMessage.includes('dale')) {
       if (sessionMemory[userId].history?.suggestedDate) {
         const fecha = sessionMemory[userId].history.suggestedDate;
         const disponibles = getDomosDisponibles(fecha);

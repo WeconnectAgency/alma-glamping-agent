@@ -1,51 +1,142 @@
-const { parse, format } = require('date-fns');
+const { parse, format, addDays, getDay, isValid, isAfter, addMonths, isWithinInterval } = require('date-fns');
 const { es } = require('date-fns/locale');
-const { addMonths } = require('date-fns');
 
-function parseNaturalDate(input) {
-  input = input.toLowerCase().trim();
+function normalizarTexto(text) {
+  if (!text) return '';
+  return text.toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\b(1ro|1°|1ero)\b/g, '1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-  // 📌 Detectar fechas ambiguas tipo "el 14"
-  const matchSoloDia = input.match(/(?:el\s*)?(\d{1,2})(?!\s*de)/);
-  if (matchSoloDia) {
-    const day = parseInt(matchSoloDia[1]);
-    const today = new Date();
+function esFinDeSemana(date) {
+  const day = getDay(date);
+  return day === 5 || day === 6 || day === 0; // viernes, sábado, domingo
+}
 
-    const opciones = [0, 1].map(m => {
-      const fecha = new Date(today.getFullYear(), today.getMonth() + m, day);
-      return {
-        date: format(fecha, 'yyyy-MM-dd'),
-        label: format(fecha, "d 'de' MMMM", { locale: es })
-      };
-    });
+function parseNaturalDate(text, referenceDate = new Date()) {
+  const lower = normalizarTexto(text);
+  const today = referenceDate;
+  const currentYear = today.getFullYear();
 
-    return {
-      needsConfirmation: true,
-      day,
-      options: opciones
-    };
+  // 1. Manejo de expresiones relativas
+  if (lower.includes('hoy')) return format(today, 'yyyy-MM-dd');
+  if (lower.includes('mañana') || lower.includes('mañana')) return format(addDays(today, 1), 'yyyy-MM-dd');
+  if (lower.includes('pasado mañana')) return format(addDays(today, 2), 'yyyy-MM-dd');
+
+  // 2. Fin de semana
+  if (lower.includes('fin de semana') || lower.includes('finde')) {
+    const daysUntilFriday = (5 - today.getDay() + 7) % 7;
+    const nextFriday = addDays(today, daysUntilFriday);
+    return format(nextFriday, 'yyyy-MM-dd');
   }
 
-  // 📌 Detectar "14 de junio", "1 de julio", etc.
-  const matchDiaMes = input.match(/(\d{1,2})\s*de\s*(\w+)/);
-  if (matchDiaMes) {
-    const dia = parseInt(matchDiaMes[1]);
-    const mesTexto = matchDiaMes[2];
+  // 3. Días de la semana
+  const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  for (let i = 0; i < diasSemana.length; i++) {
+    if (new RegExp(`(el\\s+)?${diasSemana[i]}`).test(lower)) {
+      const daysToAdd = (i - today.getDay() + 7) % 7 || 7;
+      return format(addDays(today, daysToAdd), 'yyyy-MM-dd');
+    }
+  }
 
-    const meses = [
-      'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
-    ];
+  // 4. Fechas ambiguas (solo día)
+  const matchDia = lower.match(/\bel\s*(\d{1,2})\b/);
+  if (matchDia) {
+    const day = parseInt(matchDia[1]);
+    const options = [];
 
-    const mes = meses.indexOf(mesTexto);
-    if (mes !== -1) {
-      const añoActual = new Date().getFullYear();
-      const fecha = new Date(añoActual, mes, dia);
-      return format(fecha, 'yyyy-MM-dd');
+    // Opción mes actual
+    const thisMonth = new Date(currentYear, today.getMonth(), day);
+    if (isValid(thisMonth) && isAfter(thisMonth, today)) {
+      options.push({
+        date: format(thisMonth, 'yyyy-MM-dd'),
+        label: format(thisMonth, "d 'de' MMMM", { locale: es })
+      });
+    }
+
+    // Opción próximo mes
+    const nextMonth = new Date(currentYear, today.getMonth() + 1, day);
+    if (isValid(nextMonth)) {
+      options.push({
+        date: format(nextMonth, 'yyyy-MM-dd'),
+        label: format(nextMonth, "d 'de' MMMM", { locale: es })
+      });
+    }
+
+    if (options.length > 0) {
+      return {
+        needsConfirmation: true,
+        options,
+        day,
+        isAmbiguous: true
+      };
+    }
+  }
+
+  // 5. Fechas completas (día y mes)
+  const monthPattern = '(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)';
+  const datePattern = new RegExp(`(\\d{1,2})\\s*(?:de\\s*)?${monthPattern}(?:\\s*(?:de\\s*)?(\\d{4})?`, 'i');
+  const matchFull = lower.match(datePattern);
+
+  if (matchFull) {
+    const [, dia, mesNombre, año] = matchFull;
+    const monthMap = {
+      enero: 0, ene: 0, feb: 1, febrero: 1, mar: 2, marzo: 2,
+      abr: 3, abril: 3, may: 4, mayo: 4, jun: 5, junio: 5,
+      jul: 6, julio: 6, ago: 7, agosto: 7, sep: 8, septiembre: 8,
+      oct: 9, octubre: 9, nov: 10, noviembre: 10, dic: 11, diciembre: 11
+    };
+
+    const monthIndex = monthMap[mesNombre.toLowerCase()];
+    if (monthIndex === undefined) return null;
+
+    const year = año ? parseInt(año) : currentYear;
+    let parsedDate = new Date(year, monthIndex, parseInt(dia));
+
+    // Ajuste para fechas inválidas (ej. 31 de abril)
+    if (!isValid(parsedDate)) {
+      parsedDate = new Date(year, monthIndex + 1, 0); // Último día del mes
+    }
+
+    // Ajuste automático de año si la fecha ya pasó
+    if (isAfter(today, parsedDate) && !año) {
+      parsedDate = addYears(parsedDate, 1);
+    }
+
+    return format(parsedDate, 'yyyy-MM-dd');
+  }
+
+  // 6. Fechas numéricas (14/06 o 06-14)
+  const numericPattern = /(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/;
+  const matchNumeric = lower.match(numericPattern);
+
+  if (matchNumeric) {
+    const [, dia, mes, año] = matchNumeric;
+    const year = año ? (año.length === 2 ? 2000 + parseInt(año) : parseInt(año)) : currentYear;
+    const parsedDate = new Date(year, parseInt(mes) - 1, parseInt(dia));
+    
+    if (isValid(parsedDate)) {
+      return format(parsedDate, 'yyyy-MM-dd');
     }
   }
 
   return null;
 }
 
-module.exports = parseNaturalDate;
+function formatToHuman(dateStr) {
+  try {
+    const date = parse(dateStr, 'yyyy-MM-dd', new Date());
+    return isValid(date) ? format(date, "d 'de' MMMM", { locale: es }) : dateStr;
+  } catch {
+    return dateStr;
+  }
+}
+
+module.exports = {
+  parseNaturalDate,
+  formatToHuman,
+  esFinDeSemana
+};
