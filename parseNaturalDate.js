@@ -78,7 +78,7 @@ function parseNaturalDate(text, referenceDate = new Date()) {
 
   // 5. Fechas completas (día y mes)
   const monthPattern = '(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)';
-  const datePattern = new RegExp(`(\\d{1,2})\\s*(?:de\\s*)?${monthPattern}(?:\\s*(?:de\\s*)?(\\d{4})?`, 'i');
+const datePattern = new RegExp(`(\\d{1,2})\\s*(?:de\\s*)?${monthPattern}(?:\\s*(?:de\\s*)?(\\d{4}))?`, 'i');
   const matchFull = lower.match(datePattern);
 
   if (matchFull) {
