@@ -6,7 +6,7 @@ const { format, addDays } = require('date-fns');
 require('dotenv').config();
 
 const { sugerirAlternativa, formatToHuman } = require('./sugerirAlternativa');
-const parseNaturalDate = require('./parseNaturalDate');
+const { parseNaturalDate } = require('./parseNaturalDate');
 const parseDateRange = require('./parseDateRange');
 const {
   checkAvailability,
