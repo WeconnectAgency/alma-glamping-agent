@@ -249,16 +249,17 @@ const response = await axios.post(
   }
 );
 
-// ✅ Saludo solo una vez
+// ✅ Saludo solo una vez (versión limpia y robusta)
 const botHasReplied = memory.conversation.some(m => m.role === 'assistant');
 const alreadyGreeted = memory.conversation.some(
-  m => m.role === 'assistant' && m.content.toLowerCase().includes('hola 👋, Pura Vida.')
+  m => m.role === 'assistant' && m.content.toLowerCase().includes('hola 👋 pura vida.')
 );
 const shouldGreet = !botHasReplied && !alreadyGreeted;
 
+// 🐛 Debugs para inspección en logs de producción
 console.log('[🧠 DEBUG] memory.conversation:', memory.conversation);
-console.log('[🧪 DEBUG] isFirstMessage:', isFirstMessage);
 console.log('[🧪 DEBUG] alreadyGreeted:', alreadyGreeted);
+console.log('[🧪 DEBUG] shouldGreet:', shouldGreet);
 
 let botReply = response.data.choices[0].message.content;
 
@@ -267,9 +268,9 @@ if (shouldGreet) {
 }
 
 memory.conversation.push({ role: 'assistant', content: botReply });
-console.log('[📝 BOT REPLY FINAL]:', botReply); // 👈 DEBUG antes del return
-return res.json({ reply: botReply });
 
+console.log('[📝 BOT REPLY FINAL]:', botReply); // 👈 Debug final antes del return
+return res.json({ reply: botReply });
 
   } catch (error) {
     console.error('Error:', error);
