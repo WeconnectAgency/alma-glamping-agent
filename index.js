@@ -167,9 +167,11 @@ app.post('/mensaje', async (req, res) => {
       lower.includes('quiero hospedarme') ||
       lower.includes('quiero domo');
 
-    if (tieneIntencion && !parsedDate && !rangoFechas) {
-      return res.json({ reply: `¿Qué fechas tenés en mente para verificar la disponibilidad?` });
-    }
+if (tieneIntencion && !parsedDate && !rangoFechas) {
+  // Seguimos a fallback para que salude igual
+  parsedDate = null;
+}
+
 
  if (parsedDate && tieneIntencion) {
 const fechaISO = typeof parsedDate === 'object'
