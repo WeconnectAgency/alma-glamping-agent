@@ -90,7 +90,7 @@ const date = parse(rawDate, 'yyyy-MM-dd', new Date());
     ]);
 
     if (disponible) {
-      return `¡Buenas noticias! El ${formatToHuman(dateStr)} sigue disponible. ¿Querés reservar?`;
+   return `¡Buenas noticias! El ${formatToHuman(rawDate)} sigue disponible. ¿Querés reservar?`;
     }
 
     if (alternativas.length === 0) {
