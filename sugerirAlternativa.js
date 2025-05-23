@@ -76,6 +76,7 @@ async function getDomosDisponiblesWithCache(dateStr) {
 // 3. Versión Mejorada de sugerirAlternativa con Caché
 async function sugerirAlternativa(dateStr, userId, sessionMemory) {
   try {
+    console.log('[🐛 DEBUG] dateStr recibido en sugerirAlternativa:', dateStr);
     const rawDate = typeof dateStr === 'object' && dateStr.date
       ? dateStr.date
       : dateStr;
