@@ -250,10 +250,11 @@ const response = await axios.post(
 );
 
 // ✅ Saludo solo una vez
-const isFirstMessage = memory.conversation.filter(m => m.role === 'user').length === 1;
 const alreadyGreeted = memory.conversation.some(
   m => m.role === 'assistant' && m.content.toLowerCase().includes('hola 👋')
 );
+
+const isFirstMessage = !memory.conversation.some(m => m.role === 'assistant');
 
 console.log('[🧠 DEBUG] memory.conversation:', memory.conversation);
 console.log('[🧪 DEBUG] isFirstMessage:', isFirstMessage);
@@ -266,6 +267,7 @@ if (isFirstMessage && !alreadyGreeted) {
 }
 
 memory.conversation.push({ role: 'assistant', content: botReply });
+console.log('[📝 BOT REPLY FINAL]:', botReply); // 👈 DEBUG antes del return
 return res.json({ reply: botReply });
 
 
