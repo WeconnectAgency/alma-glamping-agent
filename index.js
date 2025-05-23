@@ -5,7 +5,7 @@ const cors = require("cors");
 const { format, addDays } = require('date-fns');
 require('dotenv').config();
 const { sugerirAlternativa } = require('./sugerirAlternativa');
-const parseNaturalDate = require('./parseNaturalDate');
+const { parseNaturalDate } = require('./parseNaturalDate');
 const parseDateRange = require('./parseDateRange');
 const { checkAvailability, checkAvailabilityRange, getDomosDisponibles, isDateAvailable } = require('./checkAvailability');
 const { formatToHuman } = require('./sugerirAlternativa');
