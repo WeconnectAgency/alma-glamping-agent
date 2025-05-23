@@ -114,15 +114,17 @@ if (!rawDate) {
 
     sessionMemory[userId].history.ultimasFechasSugeridas = alternativas;
 
-    const mensajeBase = esFinDeSemana(date)
-      ? `Ese finde está completo. Te sugiero:\n`
-      : `Esa fecha no está disponible. Podés elegir:\n`;
+let mensajeBase = esFinDeSemana(date)
+  ? `Ese finde ya está reservado 😢, pero hay otras fechas igual de especiales que te podrían gustar:\n\n`
+  : `Parece que esa fecha ya está ocupada 😕. Pero tengo algunas opciones lindas para vos:\n\n`;
 
-    const opciones = alternativas.map((alt, i) =>
-      `${i + 1}. ${alt.fecha} (${alt.domos.join(', ')})`
-    ).join('\n');
+mensajeBase += alternativas.map((alt, i) =>
+  `👉 *Opción ${i + 1}*: ${alt.fecha} — Disponible ${alt.domos.length === 4 ? 'todos los domos' : `los domos ${alt.domos.join(', ')}`}`
+).join('\n');
 
-    return `${mensajeBase}${opciones}\n\nDecime el número de tu preferencia.`;
+mensajeBase += `\n\n¿Alguna de estas opciones te gusta?`;
+
+return mensajeBase;
 
   } catch (error) {
     console.error('Error en sugerirAlternativa:', error);

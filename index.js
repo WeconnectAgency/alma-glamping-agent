@@ -208,6 +208,25 @@ if (lower.includes('otra fecha') || lower.includes('cerca') || lower.includes('a
   }
 }
 
+// 👉 Opción numérica directa: "1", "2", "3" (solo si hay fechas sugeridas)
+if (memory.history.ultimasFechasSugeridas && /^\s*[1-3]\s*$/.test(lower)) {
+  const index = parseInt(lower.trim(), 10) - 1;
+  const alternativas = memory.history.ultimasFechasSugeridas;
+
+  if (alternativas[index]) {
+    const elegida = alternativas[index];
+    delete memory.history.ultimasFechasSugeridas;
+
+    return res.json({
+      reply: `¡Perfecto! El ${elegida.fecha} está disponible con ${elegida.domos.join(', ')}. ¿Querés que avancemos con esa fecha?`,
+      availableDomes: elegida.domos
+    });
+  } else {
+    return res.json({
+      reply: `Esa opción no es válida. ¿Querés que te recuerde las opciones disponibles?`
+    });
+  }
+}
 
     // 💬 Fallback con GPT
     const response = await axios.post(
