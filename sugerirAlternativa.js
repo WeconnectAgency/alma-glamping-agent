@@ -76,7 +76,12 @@ async function getDomosDisponiblesWithCache(dateStr) {
 // 3. Versión Mejorada de sugerirAlternativa con Caché
 async function sugerirAlternativa(dateStr, userId, sessionMemory) {
   try {
-    const date = parse(dateStr, 'yyyy-MM-dd', new Date());
+   const rawDate = typeof dateString === 'object' && dateString.date
+  ? dateString.date
+  : dateString;
+
+const date = parse(rawDate, 'yyyy-MM-dd', new Date());
+
     if (!isValid(date)) throw new Error('Fecha inválida');
 
     const [disponible, alternativas] = await Promise.all([

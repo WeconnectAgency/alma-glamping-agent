@@ -171,25 +171,25 @@ app.post('/mensaje', async (req, res) => {
       return res.json({ reply: `¿Qué fechas tenés en mente para verificar la disponibilidad?` });
     }
 
-    if (parsedDate && tieneIntencion) {
-    const fechaISO = typeof parsedDate === 'object' && parsedDate.date
-  ? parsedDate.date
-  : parsedDate;
+  if (parsedDate && tieneIntencion) {
+  const fechaISO = typeof parsedDate === 'object' && parsedDate.date
+    ? parsedDate.date
+    : parsedDate;
 
-memory.history.lastDate = fechaISO;
+  memory.history.lastDate = fechaISO;
 
-const disponible = isDateAvailable(fechaISO);
+  const disponible = isDateAvailable(fechaISO);
 
+  if (!disponible) {
+    const respuesta = await sugerirAlternativa(fechaISO, userId, sessionMemory);
+    return res.json({ reply: String(respuesta) });
+  }
 
-      if (!disponible) {
-        const respuesta = sugerirAlternativa(parsedDate, userId, sessionMemory);
-        memory.history.suggestedDate = parsedDate;
-        return res.json({ reply: respuesta });
-      }
+  return res.json({
+    reply: `¡Genial! El ${formatToHuman(fechaISO)} está disponible 😊. ¿Querés que lo reservemos?`
+  });
+}
 
-      memory.history.suggestedDate = parsedDate;
-      return res.json({ reply: `¡Genial! El ${formatToHuman(parsedDate)} está disponible 😊. ¿Querés que lo reservemos?` });
-    }
 
     // 🔁 Otra fecha
     if (lower.includes('otra fecha') || lower.includes('cerca') || lower.includes('alternativa')) {
