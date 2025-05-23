@@ -172,8 +172,14 @@ app.post('/mensaje', async (req, res) => {
     }
 
     if (parsedDate && tieneIntencion) {
-      memory.history.lastDate = parsedDate;
-      const disponible = isDateAvailable(parsedDate);
+    const fechaISO = typeof parsedDate === 'object' && parsedDate.date
+  ? parsedDate.date
+  : parsedDate;
+
+memory.history.lastDate = fechaISO;
+
+const disponible = isDateAvailable(fechaISO);
+
 
       if (!disponible) {
         const respuesta = sugerirAlternativa(parsedDate, userId, sessionMemory);
