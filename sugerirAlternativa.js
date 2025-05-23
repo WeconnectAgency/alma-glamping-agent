@@ -1,6 +1,10 @@
 const { parse, format, addDays, getDay, subDays, isValid, isAfter } = require('date-fns');
 const { es } = require('date-fns/locale');
 const XLSX = require('xlsx');
+function esFinDeSemana(date) {
+  const day = getDay(date); // getDay devuelve 0 (domingo) a 6 (sábado)
+  return day === 5 || day === 6; // viernes (5) o sábado (6)
+}
 
 // 1. Sistema de Caché
 const CACHE = {
