@@ -251,6 +251,10 @@ const alreadyGreeted = memory.conversation.some(
   m => m.role === 'assistant' && m.content.toLowerCase().includes('hola 👋')
 );
 
+console.log('[🧠 DEBUG] memory.conversation:', memory.conversation);
+console.log('[🧪 DEBUG] isFirstMessage:', isFirstMessage);
+console.log('[🧪 DEBUG] alreadyGreeted:', alreadyGreeted);
+
 let botReply = response.data.choices[0].message.content;
 
 if (isFirstMessage && !alreadyGreeted) {
