@@ -1,4 +1,4 @@
-  const express = require('express');
+const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const cors = require("cors");
@@ -7,8 +7,7 @@ require('dotenv').config();
 const { sugerirAlternativa } = require('./sugerirAlternativa');
 const { parseNaturalDate } = require('./parseNaturalDate');
 const parseDateRange = require('./parseDateRange');
-const { checkAvailability, checkAvailabilityRange, getDomosDisponibles, isDateAvailable } = require('./checkAvailability');
-const { formatToHuman } = require('./sugerirAlternativa');
+const { checkAvailability, checkAvailabilityRange, getDomosDisponibles, isDateAvailable, buscarFechasAlternativas, loadWorkbookData, formatToHuman } = require('./checkAvailability');
 
 const app = express();
 app.use(cors());
@@ -91,7 +90,6 @@ app.post('/mensaje', async (req, res) => {
   const userMessage = req.body.message || '';
   const userId = req.body.userId || 'cliente';
 
-  // Inicialización de sesión si no existe
   if (!sessionMemory[userId]) {
     sessionMemory[userId] = {
       history: {},
@@ -99,11 +97,9 @@ app.post('/mensaje', async (req, res) => {
     };
   }
 
-  // Parseo inicial de fecha (única declaración)
   const parsedDate = parseNaturalDate(userMessage);
   const lowerMessage = userMessage.toLowerCase();
 
-  // Manejo de fechas ambiguas
   if (parsedDate?.needsConfirmation) {
     sessionMemory[userId].history.ambiguousDate = parsedDate;
     const optionsText = parsedDate.options.map(opt => opt.label).join(' o ');
@@ -113,12 +109,9 @@ app.post('/mensaje', async (req, res) => {
     });
   }
 
-  // Guardar mensaje en historial
   sessionMemory[userId].conversation.push({ role: 'user', content: userMessage });
 
-  // Flujo principal de conversación
   try {
-    // 1. Confirmación de sugerencia previa
     if (lowerMessage.includes('sí') || lowerMessage.includes('claro') || lowerMessage.includes('dale')) {
       if (sessionMemory[userId].history?.suggestedDate) {
         const fecha = sessionMemory[userId].history.suggestedDate;
@@ -137,7 +130,6 @@ app.post('/mensaje', async (req, res) => {
       }
     }
 
-    // 2. Manejo de rangos de fechas
     const dateRange = parseDateRange(userMessage);
     if (dateRange) {
       sessionMemory[userId].history.lastRange = dateRange;
@@ -145,21 +137,26 @@ app.post('/mensaje', async (req, res) => {
       return res.json({ reply: disponibilidad });
     }
 
-    // 3. Fechas específicas
     if (parsedDate) {
       sessionMemory[userId].history.lastDate = parsedDate;
+      const disponible = isDateAvailable(parsedDate);
 
-      if (!isDateAvailable(parsedDate)) {
-        const respuesta = await sugerirAlternativa(parsedDate, userId, sessionMemory);
-        return res.json({ reply: respuesta });
+      if (!disponible) {
+        const alternativas = buscarFechasAlternativas(loadWorkbookData(), parsedDate);
+        if (alternativas.length > 0) {
+          sessionMemory[userId].history.suggestedDate = alternativas[0];
+          return res.json({
+            reply: `El ${formatToHuman(parsedDate)} está reservado 😢. Pero hay disponibilidad en: ${alternativas.join(', ')}. ¿Querés que reservemos alguna de esas fechas?`
+          });
+        } else {
+          return res.json({ reply: `El ${formatToHuman(parsedDate)} está completo y no encontré fechas cercanas disponibles. ¿Querés que veamos otro mes?` });
+        }
       }
 
-      return res.json({
-        reply: `¡Disponible! El ${formatToHuman(parsedDate)} está libre. ¿Querés reservar?`
-      });
+      sessionMemory[userId].history.suggestedDate = parsedDate;
+      return res.json({ reply: `¡Disponible! El ${formatToHuman(parsedDate)} está libre. ¿Querés reservar?` });
     }
 
-    // 4. Solicitud de alternativas
     if (lowerMessage.includes('otra fecha') || lowerMessage.includes('alternativa')) {
       if (sessionMemory[userId].history?.lastDate) {
         const respuesta = await sugerirAlternativa(
@@ -172,7 +169,6 @@ app.post('/mensaje', async (req, res) => {
       return res.json({ reply: '¿Para qué fecha necesitás disponibilidad?' });
     }
 
-    // 5. Fallback a OpenAI para conversación general
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
@@ -193,7 +189,7 @@ app.post('/mensaje', async (req, res) => {
 
     const botReply = response.data.choices[0].message.content;
     sessionMemory[userId].conversation.push({ role: 'assistant', content: botReply });
-    
+
     return res.json({ 
       reply: botReply,
       sessionId: userId 
@@ -208,7 +204,6 @@ app.post('/mensaje', async (req, res) => {
   }
 });
 
-// Endpoint para limpiar sesiones (útil para desarrollo)
 app.post('/limpiar-sesion', (req, res) => {
   const { userId } = req.body;
   if (userId && sessionMemory[userId]) {

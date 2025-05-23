@@ -89,9 +89,33 @@ function checkAvailability(dateStr) {
   }
 }
 
+function isDateAvailable(dateStr) {
+  try {
+    const data = loadWorkbookData();
+    const targetDate = format(parse(dateStr, 'yyyy-MM-dd', new Date()), 'yyyy-MM-dd');
+
+    const row = data.find(r => {
+      if (!r['Fecha']) return false;
+      return parseExcelDate(r['Fecha']) === targetDate;
+    });
+
+    if (!row) return false;
+
+    const disponibles = Object.keys(row).filter(
+      key => key !== 'Fecha' && isDomoAvailable(row[key])
+    );
+
+    return disponibles.length > 0;
+  } catch (err) {
+    console.error('Error en isDateAvailable:', err);
+    return false;
+  }
+}
+
 module.exports = {
   checkAvailability,
   formatToHuman,
   isDomoAvailable,
-  buscarFechasAlternativas
+  buscarFechasAlternativas,
+  isDateAvailable
 };
