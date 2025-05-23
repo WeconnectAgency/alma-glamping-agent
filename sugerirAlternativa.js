@@ -146,3 +146,10 @@ async function buscarAlternativas(date, sessionMemory) {
 
   return alternativas;
 }
+module.exports = {
+  sugerirAlternativa,
+  buscarAlternativas,
+  isDateAvailableWithCache,
+  getDomosDisponiblesWithCache,
+  loadDataWithCache
+};
