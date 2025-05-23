@@ -33,14 +33,29 @@ function parseNaturalDate(text, referenceDate = new Date()) {
     return format(nextFriday, 'yyyy-MM-dd');
   }
 
-  // 3. Días de la semana
-  const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-  for (let i = 0; i < diasSemana.length; i++) {
-    if (new RegExp(`(el\\s+)?${diasSemana[i]}`).test(lower)) {
-      const daysToAdd = (i - today.getDay() + 7) % 7 || 7;
-      return format(addDays(today, daysToAdd), 'yyyy-MM-dd');
-    }
+ // 3. Días de la semana (mejorado para devolver el más próximo desde hoy)
+const diasSemana = [
+  { nombre: 'domingo', indice: 0 },
+  { nombre: 'lunes', indice: 1 },
+  { nombre: 'martes', indice: 2 },
+  { nombre: 'miércoles', indice: 3 },
+  { nombre: 'miercoles', indice: 3 }, // sin tilde
+  { nombre: 'jueves', indice: 4 },
+  { nombre: 'viernes', indice: 5 },
+  { nombre: 'sábado', indice: 6 },
+  { nombre: 'sabado', indice: 6 } // sin tilde
+];
+
+for (const dia of diasSemana) {
+  const regex = new RegExp(`(el\\s+)?${dia.nombre}`, 'i');
+  if (regex.test(lower)) {
+    let daysToAdd = (dia.indice - today.getDay() + 7) % 7;
+    if (daysToAdd === 0) daysToAdd = 7; // Nunca devuelvas hoy mismo
+    const targetDate = addDays(today, daysToAdd);
+    return format(targetDate, 'yyyy-MM-dd');
   }
+}
+
 
   // 4. Fechas ambiguas (solo día)
   const matchDia = lower.match(/\bel\s*(\d{1,2})\b/);
