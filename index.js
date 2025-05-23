@@ -4,10 +4,16 @@ const axios = require('axios');
 const cors = require("cors");
 const { format, addDays } = require('date-fns');
 require('dotenv').config();
-const { sugerirAlternativa } = require('./sugerirAlternativa');
-const { parseNaturalDate } = require('./parseNaturalDate');
+
+const { sugerirAlternativa, formatToHuman } = require('./sugerirAlternativa');
+const parseNaturalDate = require('./parseNaturalDate');
 const parseDateRange = require('./parseDateRange');
-const { checkAvailability, checkAvailabilityRange, getDomosDisponibles, isDateAvailable, buscarFechasAlternativas, loadWorkbookData, formatToHuman } = require('./checkAvailability');
+const {
+  checkAvailability,
+  checkAvailabilityRange,
+  getDomosDisponibles,
+  isDateAvailable,
+} = require('./checkAvailability');
 
 const app = express();
 app.use(cors());
@@ -84,11 +90,18 @@ Si alguien propone una idea nueva, respondé: “Contame lo que tenés en mente 
 - Práctico → tono directo, sin adornos.
 `;  
 
+
 const sessionMemory = {};
+
+function isAffirmative(text) {
+  const afirmaciones = ['sí', 'claro', 'dale', 'va', 'me parece', 'hagámoslo', 'perfecto'];
+  return afirmaciones.some(palabra => text.includes(palabra));
+}
 
 app.post('/mensaje', async (req, res) => {
   const userMessage = req.body.message || '';
   const userId = req.body.userId || 'cliente';
+  const lower = userMessage.toLowerCase();
 
   if (!sessionMemory[userId]) {
     sessionMemory[userId] = {
@@ -97,119 +110,119 @@ app.post('/mensaje', async (req, res) => {
     };
   }
 
-  const parsedDate = parseNaturalDate(userMessage);
-  const lowerMessage = userMessage.toLowerCase();
-
-  if (parsedDate?.needsConfirmation) {
-    sessionMemory[userId].history.ambiguousDate = parsedDate;
-    const optionsText = parsedDate.options.map(opt => opt.label).join(' o ');
-    return res.json({ 
-      reply: `¿Qué fecha exacta te interesa? Tenemos: ${optionsText}`,
-      options: parsedDate.options
-    });
-  }
-
-  sessionMemory[userId].conversation.push({ role: 'user', content: userMessage });
+  const memory = sessionMemory[userId];
+  memory.conversation.push({ role: 'user', content: userMessage });
 
   try {
-    if (lowerMessage.includes('sí') || lowerMessage.includes('claro') || lowerMessage.includes('dale')) {
-      if (sessionMemory[userId].history?.suggestedDate) {
-        const fecha = sessionMemory[userId].history.suggestedDate;
-        const disponibles = getDomosDisponibles(fecha);
+    // ✅ Seguimiento a sugerencia anterior
+    if (isAffirmative(lower) && memory.history.suggestedDate) {
+      const fecha = memory.history.suggestedDate;
+      delete memory.history.suggestedDate;
+      const disponibles = getDomosDisponibles(fecha);
 
-        if (disponibles.length === 0) {
-          return res.json({
-            reply: `¡Ups! Ya se reservaron todos los domos para el ${formatToHuman(fecha)}. ¿Querés que busque otras fechas?`
-          });
-        }
-
-        delete sessionMemory[userId].history.suggestedDate;
+      if (disponibles.length === 0) {
         return res.json({
-          reply: `¡Perfecto! Para el ${formatToHuman(fecha)} tenemos: ${disponibles.join(', ')}. ¿Cuál te gustaría?`
+          reply: `Uff, parece que mientras tanto se reservaron todos los domos para el ${formatToHuman(fecha)} 😢. ¿Querés que revise otra fecha?`
         });
       }
+
+      return res.json({
+        reply: `¡Perfecto! Para el ${formatToHuman(fecha)} tenemos disponibles: ${disponibles.join(', ')}. ¿Cuál te gustaría reservar?`,
+        availableDomes: disponibles
+      });
     }
 
-    const dateRange = parseDateRange(userMessage);
-    if (dateRange) {
-      sessionMemory[userId].history.lastRange = dateRange;
-      const disponibilidad = await checkAvailabilityRange(dateRange.start, dateRange.end);
+    // 🔎 Rango de fechas
+    const rangoFechas = parseDateRange(userMessage);
+    if (rangoFechas) {
+      memory.history.lastDateRange = rangoFechas;
+      const disponibilidad = checkAvailabilityRange(rangoFechas.start, rangoFechas.end);
       return res.json({ reply: disponibilidad });
     }
 
-    if (parsedDate) {
-      sessionMemory[userId].history.lastDate = parsedDate;
+    // 📆 Fin de semana
+    if (lower.includes('fin de semana')) {
+      const today = new Date();
+      const friday = addDays(today, (5 - today.getDay() + 7) % 7);
+      const sunday = addDays(friday, 2);
+      const disponibilidad = checkAvailabilityRange(format(friday, 'yyyy-MM-dd'), format(sunday, 'yyyy-MM-dd'));
+      return res.json({ reply: disponibilidad });
+    }
+
+    // 📅 Fecha puntual o natural
+    let parsedDate = parseNaturalDate(userMessage);
+    if (!parsedDate) {
+      const strictMatch = userMessage.match(/\d{4}-\d{2}-\d{2}/);
+      parsedDate = strictMatch ? strictMatch[0] : null;
+    }
+
+    const contieneFechaNatural = /\d{1,2}\s*de\s*\w+/.test(userMessage);
+    const tieneIntencion =
+      lower.includes('disponibilidad') ||
+      lower.includes('fecha') ||
+      lower.includes('reservar') ||
+      lower.includes('libre') ||
+      contieneFechaNatural ||
+      lower.includes('quiero ir') ||
+      lower.includes('quiero hospedarme') ||
+      lower.includes('quiero domo');
+
+    if (tieneIntencion && !parsedDate && !rangoFechas) {
+      return res.json({ reply: `¿Qué fechas tenés en mente para verificar la disponibilidad?` });
+    }
+
+    if (parsedDate && tieneIntencion) {
+      memory.history.lastDate = parsedDate;
       const disponible = isDateAvailable(parsedDate);
 
       if (!disponible) {
-        const alternativas = buscarFechasAlternativas(loadWorkbookData(), parsedDate);
-        if (alternativas.length > 0) {
-          sessionMemory[userId].history.suggestedDate = alternativas[0];
-          return res.json({
-            reply: `El ${formatToHuman(parsedDate)} está reservado 😢. Pero hay disponibilidad en: ${alternativas.join(', ')}. ¿Querés que reservemos alguna de esas fechas?`
-          });
-        } else {
-          return res.json({ reply: `El ${formatToHuman(parsedDate)} está completo y no encontré fechas cercanas disponibles. ¿Querés que veamos otro mes?` });
-        }
-      }
-
-      sessionMemory[userId].history.suggestedDate = parsedDate;
-      return res.json({ reply: `¡Disponible! El ${formatToHuman(parsedDate)} está libre. ¿Querés reservar?` });
-    }
-
-    if (lowerMessage.includes('otra fecha') || lowerMessage.includes('alternativa')) {
-      if (sessionMemory[userId].history?.lastDate) {
-        const respuesta = await sugerirAlternativa(
-          sessionMemory[userId].history.lastDate, 
-          userId, 
-          sessionMemory
-        );
+        const respuesta = sugerirAlternativa(parsedDate, userId, sessionMemory);
+        memory.history.suggestedDate = parsedDate;
         return res.json({ reply: respuesta });
       }
-      return res.json({ reply: '¿Para qué fecha necesitás disponibilidad?' });
+
+      memory.history.suggestedDate = parsedDate;
+      return res.json({ reply: `¡Genial! El ${formatToHuman(parsedDate)} está disponible 😊. ¿Querés que lo reservemos?` });
     }
 
+    // 🔁 Otra fecha
+    if (lower.includes('otra fecha') || lower.includes('cerca') || lower.includes('alternativa')) {
+      const rememberedDate = memory.history.lastDate;
+      if (rememberedDate) {
+        const respuesta = sugerirAlternativa(rememberedDate, userId, sessionMemory);
+        return res.json({ reply: respuesta });
+      } else {
+        return res.json({ reply: '¿Para qué fecha te gustaría que revise disponibilidad?' });
+      }
+    }
+
+    // 💬 Fallback con GPT
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
         model: 'gpt-4o',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          ...sessionMemory[userId].conversation
+          ...memory.conversation
         ],
-        temperature: 0.7,
+        temperature: 0.7
       },
       {
         headers: {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
+          'Content-Type': 'application/json'
+        }
       }
     );
 
     const botReply = response.data.choices[0].message.content;
-    sessionMemory[userId].conversation.push({ role: 'assistant', content: botReply });
-
-    return res.json({ 
-      reply: botReply,
-      sessionId: userId 
-    });
+    memory.conversation.push({ role: 'assistant', content: botReply });
+    return res.json({ reply: botReply });
 
   } catch (error) {
     console.error('Error:', error);
-    return res.status(500).json({ 
-      error: 'Ocurrió un error procesando tu mensaje',
-      details: error.message 
-    });
+    return res.status(500).json({ error: 'Hubo un error procesando tu mensaje.' });
   }
-});
-
-app.post('/limpiar-sesion', (req, res) => {
-  const { userId } = req.body;
-  if (userId && sessionMemory[userId]) {
-    delete sessionMemory[userId];
-  }
-  res.json({ status: 'Sesión limpiada' });
 });
 
 app.listen(port, () => {
