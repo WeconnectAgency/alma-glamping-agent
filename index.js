@@ -249,27 +249,38 @@ const response = await axios.post(
   }
 );
 
-// ✅ Saludo solo una vez (versión limpia y robusta)
-const botHasReplied = memory.conversation.some(m => m.role === 'assistant');
-const alreadyGreeted = memory.conversation.some(
-  m => m.role === 'assistant' && m.content.toLowerCase().includes('hola 👋 pura vida.')
-);
-const shouldGreet = !botHasReplied && !alreadyGreeted;
-
-// 🐛 Debugs para inspección en logs de producción
-console.log('[🧠 DEBUG] memory.conversation:', memory.conversation);
-console.log('[🧪 DEBUG] alreadyGreeted:', alreadyGreeted);
-console.log('[🧪 DEBUG] shouldGreet:', shouldGreet);
-
 let botReply = response.data.choices[0].message.content;
 
-if (shouldGreet) {
-  botReply = `Hola 👋 Pura Vida. ${botReply}`;
+// ✅ Saludo solo una vez si es la primera interacción real
+const isFirstMessage = memory.conversation.filter(m => m.role === 'user').length === 1;
+const alreadyGreeted = memory.conversation.some(
+  m => m.role === 'assistant' && m.content.toLowerCase().includes('hola 👋')
+);
+
+if (isFirstMessage && !alreadyGreeted) {
+  // Detectar intención básica
+  const userFirstMessage = memory.conversation.find(m => m.role === 'user')?.content.toLowerCase() || '';
+  if (
+    userFirstMessage.includes('precio') ||
+    userFirstMessage.includes('cuánto') ||
+    userFirstMessage.includes('vale') ||
+    userFirstMessage.includes('tarifa')
+  ) {
+    botReply = `Hola 👋 Pura Vida. Tenemos distintas opciones para vos. ${botReply}`;
+  } else if (
+    userFirstMessage.includes('disponibilidad') ||
+    userFirstMessage.includes('quiero reservar') ||
+    userFirstMessage.includes('cómo reservo') ||
+    userFirstMessage.includes('hay lugar')
+  ) {
+    botReply = `Hola 👋 Pura Vida. ¿Qué fechas tenés en mente para verificar la disponibilidad?`;
+  } else {
+    botReply = `Hola 👋 Pura Vida. ${botReply}`;
+  }
 }
 
+console.log('[📝 BOT REPLY FINAL]:', botReply);
 memory.conversation.push({ role: 'assistant', content: botReply });
-
-console.log('[📝 BOT REPLY FINAL]:', botReply); // 👈 Debug final antes del return
 return res.json({ reply: botReply });
 
   } catch (error) {
