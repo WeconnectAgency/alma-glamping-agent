@@ -255,7 +255,6 @@ let botReply = response.data.choices[0].message.content;
 const assistantReplies = memory.conversation.filter(m => m.role === 'assistant');
 const hasGreeted = assistantReplies.some(m => m.content.toLowerCase().includes('hola 👋'));
 
-let botReply = response.data.choices[0].message.content;
 
 if (assistantReplies.length === 0 || !hasGreeted) {
   botReply = `Hola 👋 Pura Vida. ${botReply}`;

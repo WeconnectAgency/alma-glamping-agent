@@ -175,5 +175,6 @@ module.exports = {
   buscarAlternativas,
   isDateAvailableWithCache,
   getDomosDisponiblesWithCache,
-  loadDataWithCache
+  loadDataWithCache,
+   formatToHuman
 };
