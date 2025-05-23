@@ -246,10 +246,19 @@ if (memory.history.ultimasFechasSugeridas && /^\s*[1-3]\s*$/.test(lower)) {
     }
   }
 );
+const isFirstMessage = !memory.conversation.some(m => m.role === 'assistant');
+const alreadyGreeted = memory.conversation.some(
+  m => m.role === 'assistant' && m.content.toLowerCase().includes('hola 👋')
+);
 
-    const botReply = response.data.choices[0].message.content;
-    memory.conversation.push({ role: 'assistant', content: botReply });
-    return res.json({ reply: botReply });
+let botReply = response.data.choices[0].message.content;
+
+if (isFirstMessage && !alreadyGreeted) {
+  botReply = `Hola 👋 Pura Vida. ${botReply}`;
+}
+
+memory.conversation.push({ role: 'assistant', content: botReply });
+return res.json({ reply: botReply });
 
   } catch (error) {
     console.error('Error:', error);
