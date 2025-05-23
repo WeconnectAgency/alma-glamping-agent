@@ -251,37 +251,22 @@ const response = await axios.post(
 
 let botReply = response.data.choices[0].message.content;
 
-// ✅ Saludo solo una vez si es la primera interacción real
-const isFirstMessage = memory.conversation.filter(m => m.role === 'user').length === 1;
-const alreadyGreeted = memory.conversation.some(
-  m => m.role === 'assistant' && m.content.toLowerCase().includes('hola 👋')
+// ✅ Saludo solo una vez al inicio
+const userMessages = memory.conversation.filter(m => m.role === 'user');
+const assistantMessages = memory.conversation.filter(m => m.role === 'assistant');
+
+const isFirstMessage = userMessages.length === 1 && assistantMessages.length === 0;
+const alreadyGreeted = assistantMessages.some(
+  m => m.content.toLowerCase().includes('hola 👋')
 );
 
-if (isFirstMessage && !alreadyGreeted) {
-  // Detectar intención básica
-  const userFirstMessage = memory.conversation.find(m => m.role === 'user')?.content.toLowerCase() || '';
-  if (
-    userFirstMessage.includes('precio') ||
-    userFirstMessage.includes('cuánto') ||
-    userFirstMessage.includes('vale') ||
-    userFirstMessage.includes('tarifa')
-  ) {
-    botReply = `Hola 👋 Pura Vida. Tenemos distintas opciones para vos. ${botReply}`;
-  } else if (
-    userFirstMessage.includes('disponibilidad') ||
-    userFirstMessage.includes('quiero reservar') ||
-    userFirstMessage.includes('cómo reservo') ||
-    userFirstMessage.includes('hay lugar')
-  ) {
-    botReply = `Hola 👋 Pura Vida. ¿Qué fechas tenés en mente para verificar la disponibilidad?`;
-  } else {
-    botReply = `Hola 👋 Pura Vida. ${botReply}`;
-  }
-}
+console.log('[🧠 DEBUG] Mensajes previos:', memory.conversation);
+console.log('[🧪 DEBUG] isFirstMessage:', isFirstMessage);
+console.log('[🧪 DEBUG] alreadyGreeted:', alreadyGreeted);
 
-console.log('[📝 BOT REPLY FINAL]:', botReply);
-memory.conversation.push({ role: 'assistant', content: botReply });
-return res.json({ reply: botReply });
+if (isFirstMessage && !alreadyGreeted) {
+  botReply = `Hola 👋 Pura Vida. ${botReply}`;
+}
 
   } catch (error) {
     console.error('Error:', error);
