@@ -172,9 +172,9 @@ app.post('/mensaje', async (req, res) => {
     }
 
  if (parsedDate && tieneIntencion) {
-  const fechaISO = typeof parsedDate === 'object' && parsedDate.date
-    ? parsedDate.date
-    : parsedDate;
+const fechaISO = typeof parsedDate === 'object'
+  ? parsedDate.date || parsedDate.options?.[0]?.date
+  : parsedDate;
 
   if (typeof fechaISO !== 'string') {
     console.error('[❌ ERROR] isDateAvailable recibió un tipo no válido:', fechaISO);
